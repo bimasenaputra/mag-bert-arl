@@ -22,7 +22,7 @@ from transformers.modeling_utils import (
     prune_linear_layer,
 )
 from modeling import MAG
-
+from arl import ARL
 from global_configs import TEXT_DIM, ACOUSTIC_DIM, VISUAL_DIM, DEVICE
 
 logger = logging.getLogger(__name__)
@@ -320,5 +320,93 @@ class MAG_BertForSequenceClassification(BertPreTrainedModel):
                 loss = loss_fct(
                     logits.view(-1, self.num_labels), labels.view(-1))
             outputs = (loss,) + outputs
+
+        return outputs
+
+class MAG_BertWithARL(BertPreTrainedModel):
+    def __init__(self, config, multimodal_config):
+        super().__init__(config)
+        self.num_labels = config.num_labels
+
+        self.bert = MAG_BertModel(config, multimodal_config)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.classifier = ARL(config.hidden_size, config.num_labels)
+
+        self.init_weights()
+
+    def forward(
+        self,
+        input_ids,
+        visual,
+        acoustic,
+        attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        head_mask=None,
+        inputs_embeds=None,
+        labels=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        pretrain=False
+    ):
+        r"""
+        labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`, defaults to :obj:`None`):
+            Labels for computing the sequence classification/regression loss.
+            Indices should be in :obj:`[0, ..., config.num_labels - 1]`.
+            If :obj:`config.num_labels == 1` a regression loss is computed (Mean-Square loss),
+            If :obj:`config.num_labels > 1` a classification loss is computed (Cross-Entropy).
+
+    Returns:
+        :obj:`tuple(torch.FloatTensor)` comprising various elements depending on the configuration (:class:`~transformers.BertConfig`) and inputs:
+        loss (:obj:`torch.FloatTensor` of shape :obj:`(1,)`, `optional`, returned when :obj:`label` is provided):
+            Classification (or regression if config.num_labels==1) loss.
+        logits (:obj:`torch.FloatTensor` of shape :obj:`(batch_size, config.num_labels)`):
+            Classification (or regression if config.num_labels==1) scores (before SoftMax).
+        hidden_states (:obj:`tuple(torch.FloatTensor)`, `optional`, returned when ``output_hidden_states=True`` is passed or when ``config.output_hidden_states=True``):
+            Tuple of :obj:`torch.FloatTensor` (one for the output of the embeddings + one for the output of each layer)
+            of shape :obj:`(batch_size, sequence_length, hidden_size)`.
+
+            Hidden-states of the model at the output of each layer plus the initial embedding outputs.
+        attentions (:obj:`tuple(torch.FloatTensor)`, `optional`, returned when ``output_attentions=True`` is passed or when ``config.output_attentions=True``):
+            Tuple of :obj:`torch.FloatTensor` (one for each layer) of shape
+            :obj:`(batch_size, num_heads, sequence_length, sequence_length)`.
+
+            Attentions weights after the attention softmax, used to compute the weighted average in the self-attention
+            heads.
+        """
+
+        outputs = self.bert(
+            input_ids,
+            visual,
+            acoustic,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+        )
+
+        pooled_output = outputs[1]
+
+        pooled_output = self.dropout(pooled_output)
+
+        self.classifier.learner_zero_grad()
+        
+        if pretrain:
+            self.classifer.adversary_zero_grad()
+
+        learner_logits, adversary_logits = self.classifier(pooled_output)
+
+        outputs = (learner_logits,) + outputs[
+            2:
+        ]  # add hidden states and attention if they are here
+
+        if labels is not None:
+            learner_loss = self.classifier.get_learner_loss(logits, labels)
+            adversary_loss = self.classifier.get_adversary_loss(learner_logits, labels, adversary_logits)
+
+            outputs = (learner_loss, adversary_loss,) + outputs
 
         return outputs
