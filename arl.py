@@ -51,7 +51,7 @@ class LearnerNN(nn.Module):
         self.layers = nn.Sequential(*all_layers)
 
 
-    def forward(self, features, labels=None):
+    def forward(self, features):
         """
         The forward step for the learner.
         """
