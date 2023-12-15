@@ -51,7 +51,7 @@ class LearnerNN(nn.Module):
         self.layers = nn.Sequential(*all_layers)
 
 
-    def forward(self, features):
+    def forward(self, features, labels=None):
         """
         The forward step for the learner.
         """
@@ -144,14 +144,22 @@ class ARL(nn.Module):
         self.learner.to(device)
         self.adversary.to(device)
 
-    def forward(self, features):
+    def forward(self, features, targets=None):
         """
         The forward step for the ARL.
         """
         learner_logits = self.learner(features)
         adversary_logits = self.adversary(features)
 
-        return learner_logits, adversary_logits
+        outputs = (learner_logits,)
+
+        if targets is not None:
+            learner_loss = self.get_learner_loss(learner_logits, targets)
+            adversary_loss = self.get_adversary_loss(learner_logits, targets, adversary_logits)
+
+            outputs = (learner_loss, adversary_loss,) + outputs
+
+        return outputs
 
     def get_learner_loss(self, logits, targets):
         """

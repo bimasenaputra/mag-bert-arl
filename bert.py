@@ -346,8 +346,7 @@ class MAG_BertWithARL(BertPreTrainedModel):
         inputs_embeds=None,
         labels=None,
         output_attentions=None,
-        output_hidden_states=None,
-        pretrain=False
+        output_hidden_states=None
     ):
         r"""
         labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`, defaults to :obj:`None`):
@@ -389,24 +388,17 @@ class MAG_BertWithARL(BertPreTrainedModel):
         )
 
         pooled_output = outputs[1]
-
         pooled_output = self.dropout(pooled_output)
+        classifier_output = self.classifier(pooled_output, labels)
 
-        self.classifier.learner_zero_grad()
-        
-        if pretrain:
-            self.classifer.adversary_zero_grad()
-
-        learner_logits, adversary_logits = self.classifier(pooled_output)
-
-        outputs = (learner_logits,) + outputs[
+        outputs = classifier_output + outputs[
             2:
         ]  # add hidden states and attention if they are here
 
-        if labels is not None:
-            learner_loss = self.classifier.get_learner_loss(logits, labels)
-            adversary_loss = self.classifier.get_adversary_loss(learner_logits, labels, adversary_logits)
-
-            outputs = (learner_loss, adversary_loss,) + outputs
-
         return outputs
+
+    def zero_grad(self, pretrain=False):
+        self.classifier.learner_zero_grad()
+
+        if pretrain:
+            self.classifier.adversary_zero_grad()
