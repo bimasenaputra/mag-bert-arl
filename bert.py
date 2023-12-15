@@ -396,9 +396,3 @@ class MAG_BertWithARL(BertPreTrainedModel):
         ]  # add hidden states and attention if they are here
 
         return outputs
-
-    def zero_grad(self, pretrain=False):
-        self.classifier.learner_zero_grad()
-
-        if pretrain:
-            self.classifier.adversary_zero_grad()
