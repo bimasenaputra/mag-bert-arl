@@ -125,8 +125,7 @@ class ARL(nn.Module):
           activation_fn: the activation function to use for the learner.
         """
         super().__init__()
-        torch.autograd.set_detect_anomaly(True)
-
+        
         self.device = device
         self.adversary_weights = torch.ones(batch_size, 1)
 
