@@ -205,8 +205,8 @@ class ARL(nn.Module):
 
             return class_weights
 
-    def learner_parameters(self):
+    def get_learner_parameters(self):
         return self.learner.parameters()
 
-    def adversary_parameters(self):
+    def get_adversary_parameters(self):
         return self.adversary.parameters()
