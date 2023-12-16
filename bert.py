@@ -303,7 +303,7 @@ class MAG_BertWithARL(BertPreTrainedModel):
 
         self.bert = MAG_BertModel(config, multimodal_config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.classifier = ARL(config.hidden_size, config.num_labels, device=config.device)
+        self.classifier = ARL(config.hidden_size, config.num_labels)
 
         self.init_weights()
 

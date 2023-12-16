@@ -1,5 +1,6 @@
 import numpy as np
 from typing import *
+from argparse_utils import set_random_seed
 
 import torch
 from torch.nn import CrossEntropyLoss, L1Loss, MSELoss, DataParallel
@@ -66,6 +67,8 @@ class Seq2SeqModel:
                 )
         else:
             self.device = "cpu"
+
+        set_random_seed(args.seed)
 
         if not use_cuda:
             self.args.fp16 = False

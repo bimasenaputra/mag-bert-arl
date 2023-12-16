@@ -54,8 +54,6 @@ def set_up_data_loader():
     return test_dataloader
 
 def main():
-    set_random_seed(args.seed)
-
     model = Seq2SeqModel(args.model_type, args.model, args)
     test_data_loader = set_up_data_loader()
     model.test(test_data_loader)

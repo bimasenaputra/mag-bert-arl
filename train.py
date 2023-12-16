@@ -85,8 +85,6 @@ def set_up_data_loader():
     )
 
 def main():
-    set_random_seed(args.seed)
-
     (
         train_data_loader,
         dev_data_loader,

@@ -22,8 +22,7 @@ import numpy as np
 
 class LearnerNN(nn.Module):
     def __init__(
-        self, hidden_size, num_labels, n_hidden, 
-        activation_fn=nn.ReLU, device='cpu'
+        self, hidden_size, num_labels, n_hidden, activation_fn=nn.ReLU
     ):
         """
         Implements the learner DNN.
@@ -36,7 +35,6 @@ class LearnerNN(nn.Module):
           activation_fn: the activation function to use.
         """
         super().__init__()
-        self.device = device
         self.hidden_size = hidden_size
         self.num_labels = num_labels
 
@@ -60,21 +58,17 @@ class LearnerNN(nn.Module):
 
         # Get the logits output (for calculating loss)
         logits = self.layers(features)
-        logits.to(self.device)
-
         outputs = (logits, )
 
         if targets is not None:
             loss = F.binary_cross_entropy_with_logits(logits, targets)
-            loss.to(self.device)
-
             outputs = outputs + (loss, )
 
         return outputs
 
 
 class AdversaryNN(nn.Module):
-    def __init__(self, hidden_size, num_labels, n_hidden device='cpu'):
+    def __init__(self, hidden_size, num_labels, n_hidden):
         """
         Implements the adversary DNN.
         Args:
@@ -106,10 +100,8 @@ class AdversaryNN(nn.Module):
         The forward step for the adversary.
         """
         logits = self.layers(features)
-        logits.to(self.device)
-
         weights = self.compute_example_weights(logits)
-        self.weights = weights.to(self.device)
+        self.weights = weights
 
         return weights
 
@@ -144,7 +136,6 @@ class ARL(nn.Module):
         learner_hidden_units=[64, 32],
         adversary_hidden_units=[32],
         activation_fn=nn.ReLU,
-        device='cpu',
     ):
         """
         Combines the Learner and Adversary into a single module.
@@ -162,7 +153,6 @@ class ARL(nn.Module):
         """
         super().__init__()
         
-        self.device = device
         self.hidden_size = hidden_size
         self.num_labels = num_labels
         self.pretrain = False
@@ -171,22 +161,18 @@ class ARL(nn.Module):
             hidden_size,
             num_labels,
             learner_hidden_units,
-            activation_fn=activation_fn,
-            device=device
+            activation_fn=activation_fn
         )
         self.adversary = AdversaryNN(
-            hidden_size, num_labels, adversary_hidden_units, device=device
+            hidden_size, num_labels, adversary_hidden_units
         )
-
-        self.learner.to(device)
-        self.adversary.to(device)
 
     def forward(self, features, targets=None):
         """
         The forward step for the ARL.
         """
         learner_logits, learner_loss_raw = self.learner(features, targets)
-        adversary_logits = self.adversary(features)
+        adversary_weights = self.adversary(features)
 
         outputs = (learner_logits,)
 
@@ -199,7 +185,7 @@ class ARL(nn.Module):
     def get_loss(self, learner_loss_raw, features):
         if self.pretrain:
             batch_size = features.size(0)
-            adversary_weights = torch.ones(batch_size, self.num_labels).to(self.device)
+            adversary_weights = torch.ones(batch_size, self.num_labels)
         else:
             adversary_weights = self.adversary.get_weights()
         
