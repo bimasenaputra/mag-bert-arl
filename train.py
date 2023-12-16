@@ -17,7 +17,6 @@ parser.add_argument("--max_seq_length", type=int, default=50)
 parser.add_argument("--train_batch_size", type=int, default=48)
 parser.add_argument("--num_labels", type=int, default=1)
 parser.add_argument("--dev_batch_size", type=int, default=128)
-#parser.add_argument("--test_batch_size", type=int, default=128)
 parser.add_argument("--n_epochs", type=int, default=40)
 parser.add_argument("--beta_shift", type=float, default=1.0)
 parser.add_argument("--dropout_prob", type=float, default=0.5)
@@ -50,6 +49,7 @@ parser.add_argument("--no_save", type=str2bool, default="false", help="Save mode
 parser.add_argument("--lr_adversary", type=float, default=1e-5, help="Learning rate for the adversary")
 parser.add_argument("--pretrain_steps", type=int, default=250, help="Number of steps to pretrain the learner")
 args = parser.parse_args()
+args.device = DEVICE
 
 def set_up_data_loader():
     with open(f"datasets/{args.dataset}.pkl", "rb") as handle:

@@ -37,6 +37,8 @@ class LearnerNN(nn.Module):
         """
         super().__init__()
         self.device = device
+        self.hidden_size = hidden_size
+        self.num_labels = num_labels
 
         all_layers = []
         input_size = hidden_size
@@ -51,7 +53,7 @@ class LearnerNN(nn.Module):
         self.layers = nn.Sequential(*all_layers)
 
 
-    def forward(self, features):
+    def forward(self, features, targets=None):
         """
         The forward step for the learner.
         """
@@ -60,7 +62,15 @@ class LearnerNN(nn.Module):
         logits = self.layers(features)
         logits.to(self.device)
 
-        return logits
+        outputs = (logits, )
+
+        if targets is not None:
+            loss = F.binary_cross_entropy_with_logits(logits, targets)
+            loss.to(self.device)
+
+            outputs = outputs + (loss, )
+
+        return outputs
 
 
 class AdversaryNN(nn.Module):
@@ -76,6 +86,9 @@ class AdversaryNN(nn.Module):
         """
         super().__init__()
         self.device = device
+        self.hidden_size = hidden_size
+        self.num_labels = num_labels
+        self.weights = None
 
         all_layers = []
         input_size = hidden_size
@@ -95,7 +108,31 @@ class AdversaryNN(nn.Module):
         logits = self.layers(features)
         logits.to(self.device)
 
-        return logits
+        weights = self.compute_example_weights(logits)
+        self.weights = weights.to(self.device)
+
+        return weights
+
+    def compute_example_weights(self, logits):
+        if self.num_labels == 1:
+            # Doing regression
+            example_weights = torch.sigmoid(logits)
+            mean_example_weights = example_weights.mean()
+            example_weights /= torch.max(mean_example_weights, torch.tensor(1e-4))
+            example_weights = torch.ones_like(example_weights) + example_weights
+
+            return example_weights
+        else:
+            example_weights = torch.softmax(logits, dim=1)  
+            mean_example_weights = example_weights.mean(dim=0)  
+            example_weights /= torch.max(mean_example_weights, torch.tensor(1e-4)) 
+            example_weights = torch.ones_like(example_weights) + example_weights 
+            class_weights = example_weights[torch.arange(example_weights.size(0)), labels] 
+
+            return class_weights
+
+    def get_weights(self):
+        return self.weights
 
 
 class ARL(nn.Module):
@@ -106,7 +143,6 @@ class ARL(nn.Module):
         num_labels,
         learner_hidden_units=[64, 32],
         adversary_hidden_units=[32],
-        batch_size=256,
         activation_fn=nn.ReLU,
         device='cpu',
     ):
@@ -127,7 +163,9 @@ class ARL(nn.Module):
         super().__init__()
         
         self.device = device
-        self.adversary_weights = torch.ones(batch_size, 1)
+        self.hidden_size = hidden_size
+        self.num_labels = num_labels
+        self.pretrain = False
 
         self.learner = LearnerNN(
             hidden_size,
@@ -147,66 +185,52 @@ class ARL(nn.Module):
         """
         The forward step for the ARL.
         """
-        learner_logits = self.learner(features)
+        learner_logits, learner_loss_raw = self.learner(features, targets)
         adversary_logits = self.adversary(features)
 
         outputs = (learner_logits,)
 
         if targets is not None:
-            learner_loss = self.get_learner_loss(learner_logits, targets)
-            adversary_loss = self.get_adversary_loss(learner_logits, targets, adversary_logits)
-
-            outputs = (learner_loss, adversary_loss,) + outputs
+            loss = self.get_loss(learner_loss_raw, features)
+            outputs = loss + outputs
 
         return outputs
 
-    def get_learner_loss(self, logits, targets):
+    def get_loss(self, learner_loss_raw, features):
+        if self.pretrain:
+            batch_size = features.size(0)
+            adversary_weights = torch.ones(batch_size, self.num_labels).to(self.device)
+        else:
+            adversary_weights = self.adversary.get_weights()
+        
+        learner_loss = self.get_learner_loss(learner_loss_raw, adversary_weights)
+        adversary_loss = self.get_adversary_loss(learner_loss_raw, adversary_weights)
+
+        outputs = (learner_loss, adversary_loss,)
+
+        return outputs
+
+    def get_learner_loss(self, learner_loss_raw, adversary_weights):
         """
         Compute the loss for the learner.
         """
-        loss = F.binary_cross_entropy_with_logits(logits, targets)
-        loss.to(self.device)
-
-        adversary_weights = self.adversary_weights.to(self.device)
-        weighted_loss = loss * adversary_weights
+        weighted_loss = learner_loss_raw * adversary_weights
         weighted_loss = torch.mean(weighted_loss)
         return weighted_loss
 
-    def get_adversary_loss(self, logits, targets, adv_logits):
+    def get_adversary_loss(self, learner_loss_raw, adversary_weights):
         """
         Compute the loss for the adversary.
         """
-        adversary_weights = self.compute_example_weights(adv_logits)
-        self.adversary_weights = adversary_weights.detach()
-        logits = logits.detach()
-
-        loss = F.binary_cross_entropy_with_logits(logits, targets)
-        loss.to(self.device)
-
-        weighted_loss = -(adversary_weights * loss)
+        weighted_loss = -(adversary_weights * learner_loss_raw)
         weighted_loss = torch.mean(weighted_loss)
         return weighted_loss
-
-    def compute_example_weights(self, adv_output_layer):
-        if self.num_labels == 1:
-            # Doing regression
-            example_weights = torch.sigmoid(adv_output_layer)
-            mean_example_weights = example_weights.mean()
-            example_weights /= torch.max(mean_example_weights, torch.tensor(1e-4))
-            example_weights = torch.ones_like(example_weights) + example_weights
-
-            return example_weights
-        else:
-            example_weights = torch.softmax(adv_output_layer, dim=1)  
-            mean_example_weights = example_weights.mean(dim=0)  
-            example_weights /= torch.max(mean_example_weights, torch.tensor(1e-4)) 
-            example_weights = torch.ones_like(example_weights) + example_weights 
-            class_weights = example_weights[torch.arange(example_weights.size(0)), labels] 
-
-            return class_weights
 
     def get_learner_parameters(self):
         return self.learner.parameters()
 
     def get_adversary_parameters(self):
         return self.adversary.parameters()
+
+    def set_pretrain(self, value):
+        self.pretrain = value

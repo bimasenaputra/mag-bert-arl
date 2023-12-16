@@ -109,6 +109,9 @@ class Seq2SeqModel:
             },
         ]
 
+        if ARL:
+            assert args.train_batch_size == args.dev_batch_size
+
         optimizer = AdamW(optimizer_grouped_parameters, lr=self.args.learning_rate)
         scheduler = get_linear_schedule_with_warmup(
             optimizer,
