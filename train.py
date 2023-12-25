@@ -11,8 +11,7 @@ from global_configs import ACOUSTIC_DIM, VISUAL_DIM, DEVICE, BERT_PRETRAINED_MOD
 from model import Seq2SeqModel
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dataset", type=str,
-                    choices=["mosi", "mosei"], default="mosi")
+parser.add_argument("--dataset", type=str, choices=["mosi", "mosei"], default="mosi")
 parser.add_argument("--max_seq_length", type=int, default=50)
 parser.add_argument("--train_batch_size", type=int, default=48)
 parser.add_argument("--num_labels", type=int, default=1)
@@ -20,33 +19,18 @@ parser.add_argument("--dev_batch_size", type=int, default=128)
 parser.add_argument("--n_epochs", type=int, default=40)
 parser.add_argument("--beta_shift", type=float, default=1.0)
 parser.add_argument("--dropout_prob", type=float, default=0.5)
-parser.add_argument(
-    "--model",
-    type=str,
-    default="bert-base-uncased",
-    help="Model to train"
-)
-parser.add_argument(
-    "--model_type",
-    type=str,
-    choices=["mag-bert-arl","bert-arl", "mag-bert", "bert"],
-    default="mag-bert-arl",
-    help="BERT model type: mag-bert-arl/bert-arl/mag-bert/bert"
-)
-parser.add_argument(
-    "--tokenizer",
-    type=str,
-    choices=BERT_PRETRAINED_MODEL_ARCHIVE_LIST,
-    default="bert-base-uncased",
-    help="Bert tokenizer to use, see at https://huggingface.co/models?filter=bert"
-)
+parser.add_argument("--model", type=str, default="bert-base-uncased", help="Name of model to train")
+parser.add_argument("--model_type", type=str, choices=["mag-bert-arl","bert-arl", "mag-bert", "bert"], default="mag-bert-arl", help="BERT model type")
+parser.add_argument("--tokenizer", type=str, choices=BERT_PRETRAINED_MODEL_ARCHIVE_LIST, default="bert-base-uncased", help="Bert tokenizer to use")
 parser.add_argument("--learning_rate", type=float, default=1e-5, help="Learning rate for the learner")
 parser.add_argument("--gradient_accumulation_step", type=int, default=1, help="")
 parser.add_argument("--warmup_proportion", type=float, default=0.1, help="")
 parser.add_argument("--seed", type=seed, default="random", help="Seed for reproducibility")
-parser.add_argument("--no_save", type=str2bool, default="false", help="Save model every epoch")
+parser.add_argument("--no_save", type=str2bool, default="false", help="Save model at the end of training")
+parser.add_argument("--save_model_every_epoch", type=str2bool, default="false", help="Save model every epoch")
+parser.add_argument("--output_dir", type=str, default="saves", help="Output directory where the model will be saved")
 #parser.add_argument("--with_question", type=str2bool, default="true", help="Question context")
-parser.add_argument("--lr_adversary", type=float, default=1e-5, help="Learning rate for the adversary")
+parser.add_argument("--learning_rate_adversary", type=float, default=1e-5, help="Learning rate for the adversary")
 parser.add_argument("--pretrain_steps", type=int, default=250, help="Number of steps to pretrain the learner")
 args = parser.parse_args()
 args.device = DEVICE

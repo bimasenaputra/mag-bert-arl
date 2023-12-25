@@ -54,6 +54,9 @@ class Seq2SeqModel:
         if model_name is None and args.model is not None:
             model_name = args.model
 
+        self.model_type = model_type
+        self.model_name = model_name
+
         if use_cuda:
             if torch.cuda.is_available():
                 if cuda_device == -1:
@@ -69,9 +72,6 @@ class Seq2SeqModel:
             self.device = "cpu"
 
         set_random_seed(args.seed)
-
-        if not use_cuda:
-            self.args.fp16 = False
 
         multimodal_config = MultimodalConfig(
             beta_shift=args.beta_shift, dropout_prob=args.dropout_prob
@@ -94,7 +94,12 @@ class Seq2SeqModel:
 
     def prep_for_training():
         # TODO: adversary optimizer
-        # Prepare optimizer
+
+        # Enforce same train and dev batch size for MAG-BERT 
+        if self.model_type in ["mag-bert-arl", "bert-arl"]:
+            assert self.args.train_batch_size == self.args.dev_batch_size
+
+        # Step 1: Prepare optimizer
         param_optimizer = list(self.model.named_parameters())
         no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
         optimizer_grouped_parameters = [
@@ -112,23 +117,59 @@ class Seq2SeqModel:
             },
         ]
 
-        if ARL:
-            assert args.train_batch_size == args.dev_batch_size
-
         optimizer = AdamW(optimizer_grouped_parameters, lr=self.args.learning_rate)
         scheduler = get_linear_schedule_with_warmup(
             optimizer,
             num_warmup_steps=self.args.warmup_proportion * self.args.num_train_optimization_steps,
             num_training_steps=self.args.num_train_optimization_steps,
         )
-        return optimizer, scheduler
+
+        # Step 2: Load model if previous training existed
+        if (
+            self.model_name
+            and os.path.isfile(os.path.join(self.model_name, "optimizer.pt"))
+            and os.path.isfile(os.path.join(self.model_name, "scheduler.pt"))
+        ):
+            # Load in optimizer and scheduler states
+            optimizer.load_state_dict(torch.load(os.path.join(self.model_name, "optimizer.pt")))
+            scheduler.load_state_dict(torch.load(os.path.join(self.model_name, "scheduler.pt")))
+
+        if self.model_name and os.path.exists(self.model_name):
+            try:
+                # set global_step to gobal_step of last saved checkpoint from model path
+                # specify model args as model-name/checkpoint-x-epoch-y to load model from last checkpoint
+                checkpoint_suffix = self.model_name.split("/")[-1].split("-")
+                checkpoint_suffix = checkpoint_suffix[0]
+                global_step = int(checkpoint_suffix)
+                epochs_trained = global_step // (len(train_dataloader) // self.args.gradient_accumulation_steps)
+                steps_trained_in_current_epoch = global_step % (
+                    len(train_dataloader) // self.args.gradient_accumulation_steps
+                )
+
+                logger.info("Continuing training from checkpoint, will skip to saved global_step")
+                logger.info("Continuing training from epoch %d", epochs_trained)
+                logger.info("Continuing training from global step %d", global_step)
+                logger.info("Will skip the first %d steps in the current epoch", steps_trained_in_current_epoch)
+            except ValueError:
+                logger.info("Starting fine-tuning.")
+        else:
+            global_step = 0
+            epochs_trained = 0
+            steps_trained_in_current_epoch = 0
+            
+        return optimizer, scheduler, global_step, epochs_trained, steps_trained_in_current_epoch
 
 
-    def train_epoch(train_dataloader: DataLoader, optimizer, scheduler):
+    def train_epoch(train_dataloader: DataLoader, optimizer, scheduler, global_step, epoch_number, steps_trained_in_current_epoch):
+        # TODO: adversary loss backward & step
         self.model.train()
+        global_step_new = global_step
         tr_loss = 0
         nb_tr_examples, nb_tr_steps = 0, 0
         for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
+            if steps_trained_in_current_epoch > 0:
+                steps_trained_in_current_epoch -= 1
+                continue
             batch = tuple(t.to(self.device) for t in batch)
             input_ids, visual, acoustic, input_mask, segment_ids, label_ids = batch
             visual = torch.squeeze(visual, 1)
@@ -159,12 +200,19 @@ class Seq2SeqModel:
             if (step + 1) % self.args.gradient_accumulation_step == 0:
                 optimizer.step()
                 scheduler.step()
+                global_step_new += 1
                 optimizer.zero_grad()
 
-        return tr_loss / nb_tr_steps
+        if self.args.save_model_every_epoch:
+            output_dir_current = os.path.join(output_dir, "checkpoint-{}-epoch-{}".format(global_step_new, epoch_number))
+            os.makedirs(output_dir_current, exist_ok=True)
+            self.save_model(output_dir_current, optimizer, scheduler)
+
+        return tr_loss / nb_tr_steps, global_step_new
 
 
     def eval_epoch(dev_dataloader: DataLoader, optimizer):
+        # TODO: Fairness metrics
         self.model.eval()
         dev_loss = 0
         nb_dev_examples, nb_dev_steps = 0, 0
@@ -200,6 +248,7 @@ class Seq2SeqModel:
         return dev_loss / nb_dev_steps
 
     def test_epoch(test_dataloader: DataLoader):
+        # TODO: Fairness metrics
         self.model.eval()
         preds = []
         labels = []
@@ -263,7 +312,7 @@ class Seq2SeqModel:
         for epoch_i in range(int(self.args.n_epochs)):
             test_acc, test_mae, test_corr, test_f_score = test_score_model(test_data_loader)
 
-            print(
+            logger.info(
                 "epoch:{}, test_acc:{}".format(
                     epoch_i, test_acc
                 )
@@ -272,17 +321,46 @@ class Seq2SeqModel:
             test_accuracies.append(test_acc)
 
     def train(train_dataloader, validation_dataloader=None):
-        optimizer, scheduler = prep_for_training()
+        optimizer, scheduler, global_step, epochs_trained, steps_trained_in_current_epoch = prep_for_training()
         valid_losses = []
 
         for epoch_i in range(int(self.args.n_epochs)):
-            train_loss = train_epoch(train_dataloader, optimizer, scheduler)
+            if epochs_trained > 0:
+                epochs_trained -= 1
+                continue
+            train_loss, global_step = train_epoch(train_dataloader, optimizer, scheduler, global_step, epoch_i, steps_trained_in_current_epoch)
             valid_loss = eval_epoch(validation_dataloader, optimizer) if validation_dataloader is not None else 0.0
 
-            print(
+            logger.info(
                 "epoch:{}, train_loss:{}, valid_loss:{}".format(
                     epoch_i, train_loss, valid_loss
                 )
             )
 
             valid_losses.append(valid_loss)
+
+        if not self.args.no_save:
+            self.save_model(self.args.output_dir, optimizer, scheduler)
+
+    def save_model(self, output_dir=None, optimizer=None, scheduler=None):
+        if not output_dir:
+            output_dir = self.args.output_dir
+        os.makedirs(output_dir, exist_ok=True)
+
+        logger.info(f"Saving model into {output_dir}")
+
+        # Take care of distributed/parallel training
+        model_to_save = self.model.module if hasattr(model, "module") else model
+
+        # Save model args
+        os.makedirs(output_dir, exist_ok=True)
+        self.args.save(output_dir)
+
+        # Save model
+        os.makedirs(os.path.join(output_dir), exist_ok=True)
+        model_to_save.save_pretrained(output_dir)
+
+        torch.save(self.args, os.path.join(output_dir, "training_args.bin"))
+        if optimizer and scheduler:
+            torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
+            torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))

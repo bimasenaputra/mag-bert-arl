@@ -62,7 +62,7 @@ class LearnerNN(nn.Module):
 
         if targets is not None:
             loss = F.binary_cross_entropy_with_logits(logits, targets)
-            outputs = outputs + (loss, )
+            outputs = (loss, ) + outputs
 
         return outputs
 
@@ -123,9 +123,6 @@ class AdversaryNN(nn.Module):
 
             return class_weights
 
-    def get_weights(self):
-        return self.weights
-
 
 class ARL(nn.Module):
 
@@ -171,24 +168,19 @@ class ARL(nn.Module):
         """
         The forward step for the ARL.
         """
-        learner_logits, learner_loss_raw = self.learner(features, targets)
-        adversary_weights = self.adversary(features)
-
+        learner_loss_raw, learner_logits = self.learner(features, targets)
+        
         outputs = (learner_logits,)
 
         if targets is not None:
-            loss = self.get_loss(learner_loss_raw, features)
+            batch_size = features.size(0)
+            adversary_weights = torch.ones(batch_size, self.num_labels) if self.pretrain else self.adversary(features)
+            loss = self.get_loss(learner_loss_raw, adversary_weights)
             outputs = loss + outputs
 
         return outputs
 
-    def get_loss(self, learner_loss_raw, features):
-        if self.pretrain:
-            batch_size = features.size(0)
-            adversary_weights = torch.ones(batch_size, self.num_labels)
-        else:
-            adversary_weights = self.adversary.get_weights()
-        
+    def get_loss(self, learner_loss_raw, adversary_weights):
         learner_loss = self.get_learner_loss(learner_loss_raw, adversary_weights)
         adversary_loss = self.get_adversary_loss(learner_loss_raw, adversary_weights)
 
