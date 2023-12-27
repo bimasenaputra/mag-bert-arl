@@ -139,8 +139,7 @@ class Seq2SeqModel:
                 # set global_step to gobal_step of last saved checkpoint from model path
                 # specify model args as model-name/checkpoint-x-epoch-y to load model from last checkpoint
                 checkpoint_suffix = self.model_name.split("/")[-1].split("-")
-                checkpoint_suffix = checkpoint_suffix[0]
-                global_step = int(checkpoint_suffix)
+                global_step = int(checkpoint_suffix[1])
                 epochs_trained = global_step // (len(train_dataloader) // self.args.gradient_accumulation_steps)
                 steps_trained_in_current_epoch = global_step % (
                     len(train_dataloader) // self.args.gradient_accumulation_steps
@@ -152,10 +151,6 @@ class Seq2SeqModel:
                 logger.info("Will skip the first %d steps in the current epoch", steps_trained_in_current_epoch)
             except ValueError:
                 logger.info("Starting fine-tuning.")
-        else:
-            global_step = 0
-            epochs_trained = 0
-            steps_trained_in_current_epoch = 0
             
         return optimizer, scheduler, global_step, epochs_trained, steps_trained_in_current_epoch
 
@@ -189,7 +184,7 @@ class Seq2SeqModel:
             if self.args.gradient_accumulation_step > 1:
                 loss = loss / self.args.gradient_accumulation_step
 
-            if args.n_gpu > 1:
+            if self.args.n_gpu > 1:
                 loss = loss.mean()
 
             loss.backward()
@@ -239,7 +234,7 @@ class Seq2SeqModel:
                 if self.args.gradient_accumulation_step > 1:
                     loss = loss / self.args.gradient_accumulation_step
 
-                if args.n_gpu > 1:
+                if self.args.n_gpu > 1:
                     loss = loss.mean()
 
                 dev_loss += loss.item()
