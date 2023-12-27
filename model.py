@@ -163,11 +163,12 @@ class Seq2SeqModel:
             },
         ]
 
+        num_train_optimization_steps_adv = self.args.num_train_optimization_steps - int(self.args.pretrain_steps/self.args.gradient_accumulation_step) * self.args.n_epochs
         optimizer = AdamW(optimizer_grouped_parameters, lr=self.args.learning_rate_adversary)
         scheduler = get_linear_schedule_with_warmup(
             optimizer,
-            num_warmup_steps=self.args.warmup_proportion * (self.args.num_train_optimization_steps - self.args.pretrain_steps/self.args.gradient_accumulation_step * self.args.n_epochs),
-            num_training_steps=(self.args.num_train_optimization_steps - self.args.pretrain_steps/self.args.gradient_accumulation_step * self.args.n_epochs),
+            num_warmup_steps=self.args.warmup_proportion * num_train_optimization_steps_adv,
+            num_training_steps=num_train_optimization_steps_adv,
         )
 
         # Step 2: Load model if previous training existed
@@ -189,7 +190,7 @@ class Seq2SeqModel:
 
         if self.model_name and os.path.exists(self.model_name):
             try:
-                # set global_step to gobal_step of last saved checkpoint from model path
+                # set global_step to global_step of last saved checkpoint from model path
                 # specify model args as model-name/checkpoint-x-epoch-y to load model from last checkpoint
                 checkpoint_suffix = self.model_name.split("/")[-1].split("-")
                 global_step = int(checkpoint_suffix[1])
