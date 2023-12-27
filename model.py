@@ -141,19 +141,23 @@ class Seq2SeqModel:
             return None, None
 
         # Step 1: Prepare optimizer
-        param_optimizer = list(self.model.get_adversary_named_parameters())
+        param_optimizer = list(self.model.named_parameters())
         no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
+
+        # Exclude adversary parameters if it's an ARL model
+        learner_param_optimizer = list(self.model.get_learner_named_parameters())
+        no_grad = [n for n,p in learner_param_optimizer]
 
         optimizer_grouped_parameters = [
             {
                 "params": [ 
-                    p for n, p in param_optimizer if not any(nd in n for nd in no_decay)
+                    p for n, p in param_optimizer if not any(nd in n for nd in no_decay) and not any(ng in n for ng in no_grad)
                 ],
                 "weight_decay": 0.01,
             },
             {
                 "params": [
-                    p for n, p in param_optimizer if any(nd in n for nd in no_decay)
+                    p for n, p in param_optimizer if any(nd in n for nd in no_decay) and not any(ng in n for ng in no_grad)
                 ],
                 "weight_decay": 0.0,
             },
@@ -162,8 +166,8 @@ class Seq2SeqModel:
         optimizer = AdamW(optimizer_grouped_parameters, lr=self.args.learning_rate_adversary)
         scheduler = get_linear_schedule_with_warmup(
             optimizer,
-            num_warmup_steps=self.args.warmup_proportion * (self.args.num_train_optimization_steps - self.args.pretrain_steps * self.args.n_epochs),
-            num_training_steps=(self.args.num_train_optimization_steps - self.args.pretrain_steps * self.args.n_epochs),
+            num_warmup_steps=self.args.warmup_proportion * (self.args.num_train_optimization_steps - self.args.pretrain_steps/self.args.gradient_accumulation_step * self.args.n_epochs),
+            num_training_steps=(self.args.num_train_optimization_steps - self.args.pretrain_steps/self.args.gradient_accumulation_step * self.args.n_epochs),
         )
 
         # Step 2: Load model if previous training existed

@@ -373,5 +373,8 @@ class MAG_BertWithARL(BertPreTrainedModel):
     def set_pretrain(self, value):
         self.classifier.set_pretrain(value)
 
+    def get_learner_named_parameters(self):
+        self.classifier.get_learner_named_parameters()
+
     def get_adversary_named_parameters(self):
         self.classifier.get_adversary_named_parameters()
