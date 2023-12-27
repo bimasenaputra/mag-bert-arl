@@ -119,8 +119,8 @@ class Seq2SeqModel:
         optimizer = AdamW(optimizer_grouped_parameters, lr=self.args.learning_rate)
         scheduler = get_linear_schedule_with_warmup(
             optimizer,
-            num_warmup_steps=self.args.warmup_proportion * (self.args.num_train_optimization_steps - self.args.pretrain_steps),
-            num_training_steps=(self.args.num_train_optimization_steps - self.args.pretrain_steps),
+            num_warmup_steps=self.args.warmup_proportion * (self.args.num_train_optimization_steps - self.args.pretrain_steps * self.args.n_epochs),
+            num_training_steps=(self.args.num_train_optimization_steps - self.args.pretrain_steps * self.args.n_epochs),
         )
 
         # Step 2: Load model if previous training existed
