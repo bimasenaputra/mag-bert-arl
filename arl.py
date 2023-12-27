@@ -152,7 +152,7 @@ class ARL(nn.Module):
         
         self.hidden_size = hidden_size
         self.num_labels = num_labels
-        self.pretrain = False
+        self.pretrain = True
 
         self.learner = LearnerNN(
             hidden_size,
@@ -204,11 +204,11 @@ class ARL(nn.Module):
         weighted_loss = torch.mean(weighted_loss)
         return weighted_loss
 
-    def get_learner_parameters(self):
-        return self.learner.parameters()
+    def get_learner_named_parameters(self):
+        return self.learner.named_parameters()
 
-    def get_adversary_parameters(self):
-        return self.adversary.parameters()
+    def get_adversary_named_parameters(self):
+        return self.adversary.named_parameters()
 
     def set_pretrain(self, value):
         self.pretrain = value

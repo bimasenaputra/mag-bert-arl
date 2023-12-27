@@ -31,7 +31,7 @@ parser.add_argument("--save_model_every_epoch", type=str2bool, default="false", 
 parser.add_argument("--output_dir", type=str, default="saves", help="Output directory where the model will be saved")
 #parser.add_argument("--with_question", type=str2bool, default="true", help="Question context")
 parser.add_argument("--learning_rate_adversary", type=float, default=1e-5, help="Learning rate for the adversary")
-parser.add_argument("--pretrain_steps", type=int, default=250, help="Number of steps to pretrain the learner")
+parser.add_argument("--pretrain_steps", type=int, default=0, help="Number of steps to pretrain the learner")
 parser.add_argument("--use_cuda", type=str2bool, default="true", help="Use cuda for training")
 parser.add_argument("--cuda_device", type=int, default=0, help="Cuda device to use for training")
 parser.add_argument("--n_gpu", type=int, default=1, help="Number of GPU used for training")

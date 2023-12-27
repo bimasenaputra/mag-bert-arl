@@ -92,26 +92,25 @@ class Seq2SeqModel:
         if args.n_gpu > 1:
             self.model = DataParallel(self.model)
 
-    def prep_for_training():
-        # TODO: adversary optimizer
-
-        # Enforce same train and dev batch size for MAG-BERT 
-        if self.model_type in ["mag-bert-arl", "bert-arl"]:
-            assert self.args.train_batch_size == self.args.dev_batch_size
-
+    def get_learner_optimizer():
         # Step 1: Prepare optimizer
         param_optimizer = list(self.model.named_parameters())
         no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
+
+        # Exclude adversary parameters if it's an ARL model
+        adversary_param_optimizer = list(self.model.get_adversary_named_parameters()) if self.model_type in ["mag-bert-arl", "bert-arl"] else []   
+        no_grad = [n for n,p in adversary_param_optimizer]
+
         optimizer_grouped_parameters = [
             {
-                "params": [
-                    p for n, p in param_optimizer if not any(nd in n for nd in no_decay)
+                "params": [ 
+                    p for n, p in param_optimizer if not any(nd in n for nd in no_decay) and not any(ng in n for ng in no_grad)
                 ],
                 "weight_decay": 0.01,
             },
             {
                 "params": [
-                    p for n, p in param_optimizer if any(nd in n for nd in no_decay)
+                    p for n, p in param_optimizer if any(nd in n for nd in no_decay) and not any(ng in n for ng in no_grad)
                 ],
                 "weight_decay": 0.0,
             },
@@ -133,6 +132,56 @@ class Seq2SeqModel:
             # Load in optimizer and scheduler states
             optimizer.load_state_dict(torch.load(os.path.join(self.model_name, "optimizer.pt")))
             scheduler.load_state_dict(torch.load(os.path.join(self.model_name, "scheduler.pt")))
+            
+        return optimizer, scheduler
+
+    def get_adversary_optimizer():
+        # If it isn't an ARL model, return nothing
+        if self.model_type not in ["mag-bert-arl", "bert-arl"]:
+            return None, None
+
+        # Step 1: Prepare optimizer
+        param_optimizer = list(self.model.get_adversary_named_parameters())
+        no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
+
+        optimizer_grouped_parameters = [
+            {
+                "params": [ 
+                    p for n, p in param_optimizer if not any(nd in n for nd in no_decay)
+                ],
+                "weight_decay": 0.01,
+            },
+            {
+                "params": [
+                    p for n, p in param_optimizer if any(nd in n for nd in no_decay)
+                ],
+                "weight_decay": 0.0,
+            },
+        ]
+
+        optimizer = AdamW(optimizer_grouped_parameters, lr=self.args.learning_rate_adversary)
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=self.args.warmup_proportion * self.args.num_train_optimization_steps,
+            num_training_steps=self.args.num_train_optimization_steps,
+        )
+
+        # Step 2: Load model if previous training existed
+        if (
+            self.model_name
+            and os.path.isfile(os.path.join(self.model_name, "optimizer-adv.pt"))
+            and os.path.isfile(os.path.join(self.model_name, "scheduler-adv.pt"))
+        ):
+            # Load in optimizer and scheduler states
+            optimizer.load_state_dict(torch.load(os.path.join(self.model_name, "optimizer-adv.pt")))
+            scheduler.load_state_dict(torch.load(os.path.join(self.model_name, "scheduler-adv.pt")))
+            
+        return optimizer, scheduler
+
+    def load_last_checkpoint(self, train_dataloader_len):
+        global_step = 0 
+        epochs_trained = 0
+        steps_trained_in_current_epoch = 0
 
         if self.model_name and os.path.exists(self.model_name):
             try:
@@ -140,9 +189,9 @@ class Seq2SeqModel:
                 # specify model args as model-name/checkpoint-x-epoch-y to load model from last checkpoint
                 checkpoint_suffix = self.model_name.split("/")[-1].split("-")
                 global_step = int(checkpoint_suffix[1])
-                epochs_trained = global_step // (len(train_dataloader) // self.args.gradient_accumulation_steps)
+                epochs_trained = global_step // (train_dataloader_len // self.args.gradient_accumulation_steps)
                 steps_trained_in_current_epoch = global_step % (
-                    len(train_dataloader) // self.args.gradient_accumulation_steps
+                    train_dataloader_len // self.args.gradient_accumulation_steps
                 )
 
                 logger.info("Continuing training from checkpoint, will skip to saved global_step")
@@ -151,12 +200,11 @@ class Seq2SeqModel:
                 logger.info("Will skip the first %d steps in the current epoch", steps_trained_in_current_epoch)
             except ValueError:
                 logger.info("Starting fine-tuning.")
-            
-        return optimizer, scheduler, global_step, epochs_trained, steps_trained_in_current_epoch
 
+        return global_step, epochs_trained, steps_trained_in_current_epoch
 
-    def train_epoch(train_dataloader: DataLoader, optimizer, scheduler, global_step, epoch_number, steps_trained_in_current_epoch):
-        # TODO: adversary loss backward & step
+    def train_epoch(train_dataloader: DataLoader, optimizer, scheduler, global_step, epoch_number, steps_trained_in_current_epoch=0, adv_optimizer=None, adv_scheduler=None):
+        # TODO: adversary loss backward
         self.model.train()
         global_step_new = global_step
         tr_loss = 0
@@ -175,11 +223,9 @@ class Seq2SeqModel:
                 acoustic,
                 token_type_ids=segment_ids,
                 attention_mask=input_mask,
-                labels=None,
+                labels=label_ids,
             )
-            logits = outputs[0]
-            loss_fct = MSELoss()
-            loss = loss_fct(logits.view(-1), label_ids.view(-1))
+            loss = outputs[0]
 
             if self.args.gradient_accumulation_step > 1:
                 loss = loss / self.args.gradient_accumulation_step
@@ -189,19 +235,42 @@ class Seq2SeqModel:
 
             loss.backward()
 
+            if adv_optimizer and adv_scheduler:
+                adv_loss = outputs[1]
+
+                if self.args.gradient_accumulation_step > 1:
+                    adv_loss = adv_loss / self.args.gradient_accumulation_step
+
+                if self.args.n_gpu:
+                    adv_loss = adv_loss.mean()
+
+                if step > self.args.pretrain_steps:
+                    adv_loss.backward()
+
             tr_loss += loss.item()
             nb_tr_steps += 1
 
             if (step + 1) % self.args.gradient_accumulation_step == 0:
                 optimizer.step()
                 scheduler.step()
-                global_step_new += 1
                 optimizer.zero_grad()
+
+                # TODO: Make pretrain decided by global step instead of per epoch
+                if adv_optimizer and adv_scheduler and step > self.args.pretrain_steps:
+                    self.model.set_pretrain(False)
+                    adv_optimizer.step()
+                    adv_scheduler.step()
+                    adv_optimizer.zero_grad()
+
+                global_step_new += 1
 
         if self.args.save_model_every_epoch:
             output_dir_current = os.path.join(output_dir, "checkpoint-{}-epoch-{}".format(global_step_new, epoch_number))
             os.makedirs(output_dir_current, exist_ok=True)
-            self.save_model(output_dir_current, optimizer, scheduler)
+            self.save_model(output_dir_current, optimizer, scheduler, adv_optimizer, adv_scheduler)
+
+        if adv_optimizer and adv_scheduler:
+            self.model.set_pretrain(True)
 
         return tr_loss / nb_tr_steps, global_step_new
 
@@ -224,12 +293,9 @@ class Seq2SeqModel:
                     acoustic,
                     token_type_ids=segment_ids,
                     attention_mask=input_mask,
-                    labels=None,
+                    labels=label_ids,
                 )
-                logits = outputs[0]
-
-                loss_fct = MSELoss()
-                loss = loss_fct(logits.view(-1), label_ids.view(-1))
+                loss = outputs[0]
 
                 if self.args.gradient_accumulation_step > 1:
                     loss = loss / self.args.gradient_accumulation_step
@@ -316,14 +382,20 @@ class Seq2SeqModel:
             test_accuracies.append(test_acc)
 
     def train(train_dataloader, validation_dataloader=None):
-        optimizer, scheduler, global_step, epochs_trained, steps_trained_in_current_epoch = prep_for_training()
+        # Enforce same train and dev batch size for ARL models
+        if self.model_type in ["mag-bert-arl", "bert-arl"]:
+            assert self.args.train_batch_size == self.args.dev_batch_size
+
+        optimizer, scheduler = get_learner_optimizer()
+        adv_optimizer, adv_scheduler = get_adversary_optimizer()
+        global_step, epochs_trained, steps_trained_in_current_epoch = load_last_checkpoint(len(train_dataloader))
         valid_losses = []
 
         for epoch_i in range(int(self.args.n_epochs)):
             if epochs_trained > 0:
                 epochs_trained -= 1
                 continue
-            train_loss, global_step = train_epoch(train_dataloader, optimizer, scheduler, global_step, epoch_i, steps_trained_in_current_epoch)
+            train_loss, global_step = train_epoch(train_dataloader, optimizer, scheduler, global_step, epoch_i, steps_trained_in_current_epoch, adv_optimizer, adv_scheduler)
             valid_loss = eval_epoch(validation_dataloader, optimizer) if validation_dataloader is not None else 0.0
 
             logger.info(
@@ -335,9 +407,9 @@ class Seq2SeqModel:
             valid_losses.append(valid_loss)
 
         if not self.args.no_save:
-            self.save_model(self.args.output_dir, optimizer, scheduler)
+            self.save_model(self.args.output_dir, optimizer, scheduler, adv_optimizer, adv_scheduler)
 
-    def save_model(self, output_dir=None, optimizer=None, scheduler=None):
+    def save_model(self, output_dir=None, optimizer=None, scheduler=None, adv_optimizer=None, adv_scheduler=None):
         if not output_dir:
             output_dir = self.args.output_dir
         os.makedirs(output_dir, exist_ok=True)
@@ -359,3 +431,7 @@ class Seq2SeqModel:
         if optimizer and scheduler:
             torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
             torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
+
+        if adv_optimizer and adv_scheduler:
+            torch.save(adv_optimizer.state_dict(), os.path.join(output_dir, "optimizer-adv.pt"))
+            torch.save(adv_scheduler.state_dict(), os.path.join(output_dir, "scheduler-adv.pt"))
