@@ -368,22 +368,13 @@ class Seq2SeqModel:
 
         f_score = f1_score(y_test, preds, average="weighted")
         acc = accuracy_score(y_test, preds)
+        roc_auc_scores = []
+        for i in range(self.args.num_labels):
+            roc_auc = roc_auc_score(y_test[:, i], preds[:, i])
+            roc_auc_scores.append(roc_auc)
+        roc_auc_scores_avg = sum(roc_auc_scores) / len(roc_auc_scores)
 
-        return acc, mae, corr, f_score
-
-    def test(test_data_loader):
-        test_accuracies = []
-
-        for epoch_i in range(int(self.args.n_epochs)):
-            test_acc, test_mae, test_corr, test_f_score = test_score_model(test_data_loader)
-
-            logger.info(
-                "epoch:{}, test_acc:{}".format(
-                    epoch_i, test_acc
-                )
-            )
-
-            test_accuracies.append(test_acc)
+        return acc, mae, corr, f_score, roc_auc_scores_avg
 
     def train(train_dataloader, validation_dataloader=None):
         # Enforce same train and dev batch size for ARL models
