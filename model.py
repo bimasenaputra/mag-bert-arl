@@ -370,7 +370,7 @@ class Seq2SeqModel:
         acc = accuracy_score(y_test, preds)
         roc_auc_scores = []
         for i in range(self.args.num_labels):
-            roc_auc = roc_auc_score(y_true[:, i], y_pred[:, i])
+            roc_auc = roc_auc_score(y_test[:, i], preds[:, i])
             roc_auc_scores.append(roc_auc)
         roc_auc_scores_avg = sum(roc_auc_scores) / len(roc_auc_scores)
 
