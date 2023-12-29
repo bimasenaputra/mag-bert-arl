@@ -1,9 +1,11 @@
+import os
+import logging
 import numpy as np
 from typing import *
 from argparse_utils import set_random_seed
 
 import torch
-from torch.nn import CrossEntropyLoss, L1Loss, MSELoss, DataParallel
+from torch.nn import DataParallel
 
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import matthews_corrcoef
@@ -11,12 +13,15 @@ from sklearn.metrics import classification_report
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import precision_recall_fscore_support
 from sklearn.metrics import accuracy_score, f1_score
+from sklearn.metrics import roc_auc_score
 
-from transformers import BertForSequenceClassification, get_linear_schedule_with_warmup
+from transformers import get_linear_schedule_with_warmup
 from transformers.optimization import AdamW
 from bert import MAG_BertForSequenceClassification, MAG_BertWithARL
 
 from tqdm import tqdm, trange
+
+logger = logging.getLogger(__name__)
 
 class MultimodalConfig(object):
     def __init__(self, beta_shift, dropout_prob):
@@ -38,9 +43,9 @@ class Seq2SeqModel:
         Initializes a Seq2SeqModel.
 
         Args:
-            model_type (optional): The type of model to use as the encoder.
+            model_type (optional): The type of model to use.
             model_name (optional): The exact architecture and trained weights to use. This may be a Hugging Face Transformers compatible pre-trained model, a community model, or the path to a directory containing model files.
-            args (optional): Default args will be used if this parameter is not provided. If provided, it should be a dict containing the args that should be changed in the default args.
+            args (optional): A dict containing the args that should be changed in the default args. All the default args are available in the training and testing file as a command input. 
             use_cuda (optional): Use GPU if available. Setting to False will force model to use CPU only.
             cuda_device (optional): Specific GPU that should be used. Will use the first available GPU by default.
             **kwargs (optional): For providing proxies, force_download, resume_download, cache_dir and other options specific to the 'from_pretrained' implementation where this will be supplied.
@@ -77,15 +82,10 @@ class Seq2SeqModel:
             beta_shift=args.beta_shift, dropout_prob=args.dropout_prob
         )
 
-        # TODO: bert-arl
-        if model_type is "bert":
-            self.model = BertForSequenceClassification.from_pretrained(model_name, num_labels=self.args.num_labels)
-        elif model_type is "mag-bert":
+        if model_type is "mag-bert":
             self.model = MAG_BertForSequenceClassification.from_pretrained(model_name, multimodal_config=multimodal_config, num_labels=self.args.num_labels)
         elif model_type is "mag-bert-arl":
             self.model = MAG_BertWithARL.from_pretrained(model_name, multimodal_config=multimodal_config, num_labels=self.args.num_labels)
-        else:
-            pass
 
         self.model.to(self.device)
 
@@ -98,7 +98,7 @@ class Seq2SeqModel:
         no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
 
         # Exclude adversary parameters if it's an ARL model
-        adversary_param_optimizer = list(self.model.get_adversary_named_parameters()) if self.model_type in ["mag-bert-arl", "bert-arl"] else []   
+        adversary_param_optimizer = list(self.model.get_adversary_named_parameters()) if self.model_type is "mag-bert-arl" else []   
         no_grad = [n for n,p in adversary_param_optimizer]
 
         optimizer_grouped_parameters = [
@@ -136,15 +136,14 @@ class Seq2SeqModel:
         return optimizer, scheduler
 
     def get_adversary_optimizer():
-        # If it isn't an ARL model, return nothing
-        if self.model_type not in ["mag-bert-arl", "bert-arl"]:
+        if self.model_type is not "mag-bert-arl":
             return None, None
 
         # Step 1: Prepare optimizer
         param_optimizer = list(self.model.named_parameters())
         no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
 
-        # Exclude adversary parameters if it's an ARL model
+        # Exclude learner parameters
         learner_param_optimizer = list(self.model.get_learner_named_parameters())
         no_grad = [n for n,p in learner_param_optimizer]
 
@@ -209,7 +208,6 @@ class Seq2SeqModel:
         return global_step, epochs_trained, steps_trained_in_current_epoch
 
     def train_epoch(train_dataloader: DataLoader, optimizer, scheduler, global_step, epoch_number, steps_trained_in_current_epoch=0, adv_optimizer=None, adv_scheduler=None):
-        # TODO: adversary loss backward
         self.model.train()
         global_step_new = global_step
         tr_loss = 0
@@ -218,6 +216,9 @@ class Seq2SeqModel:
             if steps_trained_in_current_epoch > 0:
                 steps_trained_in_current_epoch -= 1
                 continue
+            # adv_optimizer and adv_scheduler both shouldn't be none if and only if model has/uses ARL.
+            if adv_optimizer and adv_scheduler and step > self.args.pretrain_steps:
+                self.model.set_pretrain(False)
             batch = tuple(t.to(self.device) for t in batch)
             input_ids, visual, acoustic, input_mask, segment_ids, label_ids = batch
             visual = torch.squeeze(visual, 1)
@@ -261,7 +262,6 @@ class Seq2SeqModel:
                 optimizer.zero_grad()
 
                 if adv_optimizer and adv_scheduler and step > self.args.pretrain_steps:
-                    self.model.set_pretrain(False)
                     adv_optimizer.step()
                     adv_scheduler.step()
                     adv_optimizer.zero_grad()
@@ -280,7 +280,6 @@ class Seq2SeqModel:
 
 
     def eval_epoch(dev_dataloader: DataLoader, optimizer):
-        # TODO: Fairness metrics
         self.model.eval()
         dev_loss = 0
         nb_dev_examples, nb_dev_steps = 0, 0
@@ -313,7 +312,6 @@ class Seq2SeqModel:
         return dev_loss / nb_dev_steps
 
     def test_epoch(test_dataloader: DataLoader):
-        # TODO: Fairness metrics
         self.model.eval()
         preds = []
         labels = []
@@ -352,7 +350,6 @@ class Seq2SeqModel:
 
 
     def test_score_model(test_dataloader: DataLoader, use_zero=False):
-
         preds, y_test = test_epoch(test_dataloader)
         non_zeros = np.array(
             [i for i, e in enumerate(y_test) if e != 0 or use_zero])
@@ -378,7 +375,7 @@ class Seq2SeqModel:
 
     def train(train_dataloader, validation_dataloader=None):
         # Enforce same train and dev batch size for ARL models
-        if self.model_type in ["mag-bert-arl", "bert-arl"]:
+        if self.model_type is "mag-bert-arl":
             assert self.args.train_batch_size == self.args.dev_batch_size
 
         optimizer, scheduler = get_learner_optimizer()

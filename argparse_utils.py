@@ -1,6 +1,7 @@
 import random
 import os
 import numpy as np
+import torch
 import argparse
 
 
@@ -40,8 +41,6 @@ def set_random_seed(seed: int):
     Args:
         seed (int): integer to be used as seed, use -1 to randomly seed experiment
     """
-    print("Seed: {}".format(seed))
-
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.enabled = False
     torch.backends.cudnn.deterministic = True

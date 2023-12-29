@@ -1,19 +1,3 @@
-###############################################################################
-# MIT License
-#
-# Copyright (c) 2020 Jardenna Mohazzab, Luc Weytingh, 
-#                    Casper Wortmann, Barbara Brocades Zaalberg
-#
-# This file contains an implementation of the ARL model prented in "Fairness 
-# without Demographics through Adversarially Reweighted Learning" by Lahoti 
-# et al..
-#
-# Author: Jardenna Mohazzab, Luc Weytingh, 
-#         Casper Wortmann, Barbara Brocades Zaalberg 
-# Date Created: 2021-01-01
-###############################################################################
-
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -27,9 +11,8 @@ class LearnerNN(nn.Module):
         """
         Implements the learner DNN.
         Args:
-          embedding_size: list of tuples (n_classes, n_features) containing
-                           embedding sizes for categorical columns.
-          num_labels: number of classes.
+          hidden_size: number of feature dimension (input).
+          num_labels: number of classes (output).
           n_hidden: list of ints, specifies the number of units
                     in each linear layer.
           activation_fn: the activation function to use.
@@ -55,8 +38,6 @@ class LearnerNN(nn.Module):
         """
         The forward step for the learner.
         """
-
-        # Get the logits output (for calculating loss)
         logits = self.layers(features)
         outputs = (logits, )
 
@@ -72,9 +53,8 @@ class AdversaryNN(nn.Module):
         """
         Implements the adversary DNN.
         Args:
-          embedding_size: list of tuples (n_classes, n_features) containing
-                          embedding sizes for categorical columns.
-          n_num_cols: number of numerical inputs.
+          hidden_size: number of feature dimension (input).
+          num_labels: number of classes (output).
           n_hidden: list of ints, specifies the number of units
                     in each linear layer.
         """
@@ -138,20 +118,19 @@ class ARL(nn.Module):
         Combines the Learner and Adversary into a single module.
 
         Args:
-          embedding_size: list of tuples (n_classes, embedding_dim) containing
-                    embedding sizes for categorical columns.
-          n_num_cols: the amount of numerical columns in the data.
+          hidden_size: number of feature dimension (input).
+          num_labels: number of classes (output).
           learner_hidden_units: list of ints, specifies the number of units
                     in each linear layer for the learner.
           adversary_hidden_units: list of ints, specifies the number of units
                     in each linear layer for the learner.
-          batch_size: the batch size.
           activation_fn: the activation function to use for the learner.
         """
         super().__init__()
         
         self.hidden_size = hidden_size
         self.num_labels = num_labels
+        # Mode to train the learner only, used outside of this module.
         self.pretrain = True
 
         self.learner = LearnerNN(
@@ -181,6 +160,9 @@ class ARL(nn.Module):
         return outputs
 
     def get_loss(self, learner_loss_raw, adversary_weights):
+        """
+        Wrapper for computing the learner loss and adversary loss.
+        """
         learner_loss = self.get_learner_loss(learner_loss_raw, adversary_weights)
         adversary_loss = self.get_adversary_loss(learner_loss_raw, adversary_weights)
 
@@ -210,5 +192,5 @@ class ARL(nn.Module):
     def get_adversary_named_parameters(self):
         return self.adversary.named_parameters()
 
-    def set_pretrain(self, value):
+    def set_pretrain(self, value: bool):
         self.pretrain = value
