@@ -38,8 +38,8 @@ def set_up_data_loader():
 
 def main():
     model = Seq2SeqModel(args.model_type, args.model, args)
-    test_data_loader = set_up_data_loader()
-    model.test(test_data_loader)
+    test_dataloader = set_up_data_loader()
+    acc, mae, corr, f_score, roc_auc_scores_avg = model.test_score_model(test_dataloader, use_zero=False)
 
 
 if __name__ == "__main__":
