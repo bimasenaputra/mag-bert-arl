@@ -325,19 +325,20 @@ class MAG_BertWithARL(BertPreTrainedModel):
         labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`, defaults to :obj:`None`):
             Labels for computing the sequence classification/regression loss.
             Indices should be in :obj:`[0, ..., config.num_labels - 1]`.
-            If :obj:`config.num_labels == 1` a regression loss is computed (Mean-Square loss),
-            If :obj:`config.num_labels > 1` a classification loss is computed (Cross-Entropy).
+            If :obj:`config.num_labels == 1` a regression loss is computed,
+            If :obj:`config.num_labels > 1` a classification loss is computed.
 
     Returns:
         :obj:`tuple(torch.FloatTensor)` comprising various elements depending on the configuration (:class:`~transformers.BertConfig`) and inputs:
+        classifier_output (:obj:`tuple(torch.FloatTensor)`)
+            Tuple of classification (or regression), adversary loss, and classification or regression logits, in that order.
         loss (:obj:`torch.FloatTensor` of shape :obj:`(1,)`, `optional`, returned when :obj:`label` is provided):
-            Classification (or regression if config.num_labels==1) loss.
+            Classification (or regression if config.num_labels==1) and adversary loss.
         logits (:obj:`torch.FloatTensor` of shape :obj:`(batch_size, config.num_labels)`):
             Classification (or regression if config.num_labels==1) scores (before SoftMax).
         hidden_states (:obj:`tuple(torch.FloatTensor)`, `optional`, returned when ``output_hidden_states=True`` is passed or when ``config.output_hidden_states=True``):
             Tuple of :obj:`torch.FloatTensor` (one for the output of the embeddings + one for the output of each layer)
             of shape :obj:`(batch_size, sequence_length, hidden_size)`.
-
             Hidden-states of the model at the output of each layer plus the initial embedding outputs.
         attentions (:obj:`tuple(torch.FloatTensor)`, `optional`, returned when ``output_attentions=True`` is passed or when ``config.output_attentions=True``):
             Tuple of :obj:`torch.FloatTensor` (one for each layer) of shape
@@ -370,7 +371,7 @@ class MAG_BertWithARL(BertPreTrainedModel):
 
         return outputs
 
-    def set_pretrain(self, value):
+    def set_pretrain(self, value: bool):
         self.classifier.set_pretrain(value)
 
     def get_learner_named_parameters(self):
