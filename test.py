@@ -14,10 +14,10 @@ parser.add_argument("--dataset", type=str, choices=["mosi", "mosei"], default="m
 parser.add_argument("--max_seq_length", type=int, default=50, help="Maximum number of tokens the model can take in a single input")
 parser.add_argument("--num_labels", type=int, default=1, help="Number of classes/labels to predict")
 parser.add_argument("--test_batch_size", type=int, default=128, help="Batch size for testing")
-parser.add_argument("--model", type=str, default="bert-base-uncased", help="Name of model to train")
-parser.add_argument("--model_type", type=str, choices=["mag-bert-arl","bert-arl", "mag-bert", "bert"], default="mag-bert-arl", help="BERT model type")
+parser.add_argument("--model", type=str, default="bert-base-uncased", help="Name of model to test")
+parser.add_argument("--model_type", type=str, choices=["mag-bert-arl", "mag-bert"], default="mag-bert-arl", help="MAG-BERT model type")
 parser.add_argument("--tokenizer", type=str, choices=BERT_PRETRAINED_MODEL_ARCHIVE_LIST, default="bert-base-uncased", help="Bert tokenizer to use")
-parser.add_argument("--seed", type=seed, default="random", help="Seed for reproducibility")
+parser.add_argument("--seed", type=seed, default=8, help="Seed for reproducibility")
 args = parser.parse_args()
 args.device = DEVICE
 
@@ -30,7 +30,7 @@ def set_up_data_loader():
     test_dataset = get_appropriate_dataset(test_data, args.max_seq_length, args.tokenizer, VISUAL_DIM, ACOUSTIC_DIM)
 
     test_dataloader = DataLoader(
-        test_dataset, batch_size=args.test_batch_size, shuffle=True
+        test_dataset, batch_size=args.test_batch_size, shuffle=True, drop_last=True,
     )
 
     return test_dataloader

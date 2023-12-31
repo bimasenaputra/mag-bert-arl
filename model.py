@@ -6,6 +6,7 @@ from argparse_utils import set_random_seed
 
 import torch
 from torch.nn import DataParallel
+from torch.utils.data import DataLoader
 
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import matthews_corrcoef
@@ -20,8 +21,6 @@ from transformers.optimization import AdamW
 from bert import MAG_BertForSequenceClassification, MAG_BertWithARL
 
 from tqdm import tqdm, trange
-
-logger = logging.getLogger(__name__)
 
 class MultimodalConfig(object):
     def __init__(self, beta_shift, dropout_prob):
@@ -82,9 +81,9 @@ class Seq2SeqModel:
             beta_shift=args.beta_shift, dropout_prob=args.dropout_prob
         )
 
-        if model_type is "mag-bert":
+        if model_type == "mag-bert":
             self.model = MAG_BertForSequenceClassification.from_pretrained(model_name, multimodal_config=multimodal_config, num_labels=self.args.num_labels)
-        elif model_type is "mag-bert-arl":
+        elif model_type == "mag-bert-arl":
             self.model = MAG_BertWithARL.from_pretrained(model_name, multimodal_config=multimodal_config, num_labels=self.args.num_labels)
 
         self.model.to(self.device)
@@ -92,13 +91,13 @@ class Seq2SeqModel:
         if args.n_gpu > 1:
             self.model = DataParallel(self.model)
 
-    def get_learner_optimizer():
+    def get_learner_optimizer(self):
         # Step 1: Prepare optimizer
         param_optimizer = list(self.model.named_parameters())
         no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
 
         # Exclude adversary parameters if it's an ARL model
-        adversary_param_optimizer = list(self.model.get_adversary_named_parameters()) if self.model_type is "mag-bert-arl" else []   
+        adversary_param_optimizer = list(self.model.get_adversary_named_parameters()) if self.model_type == "mag-bert-arl" else []   
         no_grad = [n for n,p in adversary_param_optimizer]
 
         optimizer_grouped_parameters = [
@@ -135,8 +134,8 @@ class Seq2SeqModel:
             
         return optimizer, scheduler
 
-    def get_adversary_optimizer():
-        if self.model_type is not "mag-bert-arl":
+    def get_adversary_optimizer(self):
+        if self.model_type != "mag-bert-arl":
             return None, None
 
         # Step 1: Prepare optimizer
@@ -198,16 +197,16 @@ class Seq2SeqModel:
                     train_dataloader_len // self.args.gradient_accumulation_steps
                 )
 
-                logger.info("Continuing training from checkpoint, will skip to saved global_step")
-                logger.info("Continuing training from epoch %d", epochs_trained)
-                logger.info("Continuing training from global step %d", global_step)
-                logger.info("Will skip the first %d steps in the current epoch", steps_trained_in_current_epoch)
+                logging.info("Continuing training from checkpoint, will skip to saved global_step")
+                logging.info("Continuing training from epoch %d", epochs_trained)
+                logging.info("Continuing training from global step %d", global_step)
+                logging.info("Will skip the first %d steps in the current epoch", steps_trained_in_current_epoch)
             except ValueError:
-                logger.info("Starting fine-tuning.")
+                logging.info("Starting fine-tuning.")
 
         return global_step, epochs_trained, steps_trained_in_current_epoch
 
-    def train_epoch(train_dataloader: DataLoader, optimizer, scheduler, global_step, epoch_number, steps_trained_in_current_epoch=0, adv_optimizer=None, adv_scheduler=None):
+    def train_epoch(self, train_dataloader: DataLoader, optimizer, scheduler, global_step, epoch_number, steps_trained_in_current_epoch=0, adv_optimizer=None, adv_scheduler=None):
         self.model.train()
         global_step_new = global_step
         tr_loss = 0
@@ -223,6 +222,7 @@ class Seq2SeqModel:
             input_ids, visual, acoustic, input_mask, segment_ids, label_ids = batch
             visual = torch.squeeze(visual, 1)
             acoustic = torch.squeeze(acoustic, 1)
+            label_ids = label_ids.view(self.args.train_batch_size, self.args.num_labels)
             outputs = self.model(
                 input_ids,
                 visual,
@@ -239,7 +239,7 @@ class Seq2SeqModel:
             if self.args.n_gpu > 1:
                 loss = loss.mean()
 
-            loss.backward()
+            loss.backward(retain_graph=True)
 
             if adv_optimizer and adv_scheduler:
                 adv_loss = outputs[1]
@@ -269,7 +269,7 @@ class Seq2SeqModel:
                 global_step_new += 1
 
         if self.args.save_model_every_epoch:
-            output_dir_current = os.path.join(output_dir, "checkpoint-{}-epoch-{}".format(global_step_new, epoch_number))
+            output_dir_current = os.path.join(self.model_name, "checkpoint-{}-epoch-{}".format(global_step_new, epoch_number))
             os.makedirs(output_dir_current, exist_ok=True)
             self.save_model(output_dir_current, optimizer, scheduler, adv_optimizer, adv_scheduler)
 
@@ -279,7 +279,7 @@ class Seq2SeqModel:
         return tr_loss / nb_tr_steps, global_step_new
 
 
-    def eval_epoch(dev_dataloader: DataLoader, optimizer):
+    def eval_epoch(self, dev_dataloader: DataLoader):
         self.model.eval()
         dev_loss = 0
         nb_dev_examples, nb_dev_steps = 0, 0
@@ -290,6 +290,7 @@ class Seq2SeqModel:
                 input_ids, visual, acoustic, input_mask, segment_ids, label_ids = batch
                 visual = torch.squeeze(visual, 1)
                 acoustic = torch.squeeze(acoustic, 1)
+                label_ids = label_ids.view(self.args.dev_batch_size, self.args.num_labels)
                 outputs = self.model(
                     input_ids,
                     visual,
@@ -311,7 +312,7 @@ class Seq2SeqModel:
 
         return dev_loss / nb_dev_steps
 
-    def test_epoch(test_dataloader: DataLoader):
+    def test_epoch(self, test_dataloader: DataLoader):
         self.model.eval()
         preds = []
         labels = []
@@ -349,8 +350,8 @@ class Seq2SeqModel:
         return preds, labels
 
 
-    def test_score_model(test_dataloader: DataLoader, use_zero=False):
-        preds, y_test = test_epoch(test_dataloader)
+    def test_score_model(self, test_dataloader: DataLoader, use_zero=False):
+        preds, y_test = self.test_epoch(test_dataloader)
         non_zeros = np.array(
             [i for i, e in enumerate(y_test) if e != 0 or use_zero])
 
@@ -373,24 +374,24 @@ class Seq2SeqModel:
 
         return acc, mae, corr, f_score, roc_auc_scores_avg
 
-    def train(train_dataloader, validation_dataloader=None):
+    def train(self, train_dataloader, validation_dataloader=None):
         # Enforce same train and dev batch size for ARL models
-        if self.model_type is "mag-bert-arl":
+        if self.model_type == "mag-bert-arl":
             assert self.args.train_batch_size == self.args.dev_batch_size
 
-        optimizer, scheduler = get_learner_optimizer()
-        adv_optimizer, adv_scheduler = get_adversary_optimizer()
-        global_step, epochs_trained, steps_trained_in_current_epoch = load_last_checkpoint(len(train_dataloader))
+        optimizer, scheduler = self.get_learner_optimizer()
+        adv_optimizer, adv_scheduler = self.get_adversary_optimizer()
+        global_step, epochs_trained, steps_trained_in_current_epoch = self.load_last_checkpoint(len(train_dataloader))
         valid_losses = []
 
         for epoch_i in range(int(self.args.n_epochs)):
             if epochs_trained > 0:
                 epochs_trained -= 1
                 continue
-            train_loss, global_step = train_epoch(train_dataloader, optimizer, scheduler, global_step, epoch_i, steps_trained_in_current_epoch, adv_optimizer, adv_scheduler)
-            valid_loss = eval_epoch(validation_dataloader, optimizer) if validation_dataloader is not None else 0.0
+            train_loss, global_step = self.train_epoch(train_dataloader, optimizer, scheduler, global_step, epoch_i, steps_trained_in_current_epoch, adv_optimizer, adv_scheduler)
+            valid_loss = self.eval_epoch(validation_dataloader) if validation_dataloader is not None else 0.0
 
-            logger.info(
+            logging.info(
                 "epoch:{}, train_loss:{}, valid_loss:{}".format(
                     epoch_i, train_loss, valid_loss
                 )
@@ -406,20 +407,19 @@ class Seq2SeqModel:
             output_dir = self.args.output_dir
         os.makedirs(output_dir, exist_ok=True)
 
-        logger.info(f"Saving model into {output_dir}")
+        logging.info(f"Saving model into {output_dir}")
 
         # Take care of distributed/parallel training
-        model_to_save = self.model.module if hasattr(model, "module") else model
-
-        # Save model args
-        os.makedirs(output_dir, exist_ok=True)
-        self.args.save(output_dir)
+        model_to_save = self.model.module if hasattr(self.model, "module") else model
 
         # Save model
         os.makedirs(os.path.join(output_dir), exist_ok=True)
         model_to_save.save_pretrained(output_dir)
 
+        # Save training args
         torch.save(self.args, os.path.join(output_dir, "training_args.bin"))
+        
+        # Save optimizers and schedulers
         if optimizer and scheduler:
             torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
             torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))

@@ -10,11 +10,10 @@ import torch.utils.checkpoint
 from torch import nn
 from torch.nn import CrossEntropyLoss, MSELoss
 
-from transformers.modeling_bert import BertPreTrainedModel
-from transformers.activations import gelu, gelu_new, swish
-from transformers.configuration_bert import BertConfig
+from transformers.activations import gelu, gelu_new, silu
+from transformers.models.bert.configuration_bert import BertConfig
 
-from transformers.modeling_bert import BertEmbeddings, BertEncoder, BertPooler
+from transformers.models.bert.modeling_bert import BertPreTrainedModel, BertEmbeddings, BertEncoder, BertPooler
 from transformers.modeling_utils import (
     PreTrainedModel,
     apply_chunking_to_forward,
@@ -24,8 +23,6 @@ from transformers.modeling_utils import (
 from modeling import MAG
 from arl import ARL
 from global_configs import TEXT_DIM, ACOUSTIC_DIM, VISUAL_DIM, DEVICE
-
-logger = logging.getLogger(__name__)
 
 _CONFIG_FOR_DOC = "BertConfig"
 _TOKENIZER_FOR_DOC = "BertTokenizer"
@@ -37,7 +34,7 @@ def mish(x):
 ACT2FN = {
     "gelu": gelu,
     "relu": torch.nn.functional.relu,
-    "swish": swish,
+    "swish": silu,
     "gelu_new": gelu_new,
     "mish": mish,
 }
@@ -375,7 +372,7 @@ class MAG_BertWithARL(BertPreTrainedModel):
         self.classifier.set_pretrain(value)
 
     def get_learner_named_parameters(self):
-        self.classifier.get_learner_named_parameters()
+        return self.classifier.get_learner_named_parameters()
 
     def get_adversary_named_parameters(self):
-        self.classifier.get_adversary_named_parameters()
+        return self.classifier.get_adversary_named_parameters()
