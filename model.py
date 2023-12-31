@@ -222,6 +222,7 @@ class Seq2SeqModel:
             input_ids, visual, acoustic, input_mask, segment_ids, label_ids = batch
             visual = torch.squeeze(visual, 1)
             acoustic = torch.squeeze(acoustic, 1)
+            label_ids = label_ids.view(self.args.train_batch_size, self.args.num_labels)
             outputs = self.model(
                 input_ids,
                 visual,
@@ -238,7 +239,7 @@ class Seq2SeqModel:
             if self.args.n_gpu > 1:
                 loss = loss.mean()
 
-            loss.backward()
+            loss.backward(retain_graph=True)
 
             if adv_optimizer and adv_scheduler:
                 adv_loss = outputs[1]
@@ -278,7 +279,7 @@ class Seq2SeqModel:
         return tr_loss / nb_tr_steps, global_step_new
 
 
-    def eval_epoch(self, dev_dataloader: DataLoader, optimizer):
+    def eval_epoch(self, dev_dataloader: DataLoader):
         self.model.eval()
         dev_loss = 0
         nb_dev_examples, nb_dev_steps = 0, 0
@@ -289,6 +290,7 @@ class Seq2SeqModel:
                 input_ids, visual, acoustic, input_mask, segment_ids, label_ids = batch
                 visual = torch.squeeze(visual, 1)
                 acoustic = torch.squeeze(acoustic, 1)
+                label_ids = label_ids.view(self.args.dev_batch_size, self.args.num_labels)
                 outputs = self.model(
                     input_ids,
                     visual,
@@ -387,7 +389,7 @@ class Seq2SeqModel:
                 epochs_trained -= 1
                 continue
             train_loss, global_step = self.train_epoch(train_dataloader, optimizer, scheduler, global_step, epoch_i, steps_trained_in_current_epoch, adv_optimizer, adv_scheduler)
-            valid_loss = self.eval_epoch(validation_dataloader, optimizer) if validation_dataloader is not None else 0.0
+            valid_loss = self.eval_epoch(validation_dataloader) if validation_dataloader is not None else 0.0
 
             logging.info(
                 "epoch:{}, train_loss:{}, valid_loss:{}".format(

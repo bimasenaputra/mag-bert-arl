@@ -88,14 +88,14 @@ class AdversaryNN(nn.Module):
             # Doing regression
             example_weights = torch.sigmoid(logits)
             mean_example_weights = example_weights.mean()
-            example_weights /= torch.max(mean_example_weights, torch.tensor(1e-4))
+            example_weights = example_weights/torch.max(mean_example_weights, torch.tensor(1e-4))
             example_weights = torch.ones_like(example_weights) + example_weights
 
             return example_weights
         else:
             example_weights = torch.softmax(logits, dim=1)  
             mean_example_weights = example_weights.mean(dim=0)  
-            example_weights /= torch.max(mean_example_weights, torch.tensor(1e-4)) 
+            example_weights = example_weights/torch.max(mean_example_weights, torch.tensor(1e-4)) 
             example_weights = torch.ones_like(example_weights) + example_weights 
             class_weights = example_weights[torch.arange(example_weights.size(0)), self.num_labels] 
 
