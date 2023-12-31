@@ -30,7 +30,7 @@ def set_up_data_loader():
     test_dataset = get_appropriate_dataset(test_data, args.max_seq_length, args.tokenizer, VISUAL_DIM, ACOUSTIC_DIM)
 
     test_dataloader = DataLoader(
-        test_dataset, batch_size=args.test_batch_size, shuffle=True
+        test_dataset, batch_size=args.test_batch_size, shuffle=True, drop_last=True,
     )
 
     return test_dataloader

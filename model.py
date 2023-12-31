@@ -410,7 +410,7 @@ class Seq2SeqModel:
         logging.info(f"Saving model into {output_dir}")
 
         # Take care of distributed/parallel training
-        model_to_save = self.model.module if hasattr(model, "module") else model
+        model_to_save = self.model.module if hasattr(self.model, "module") else model
 
         # Save model
         os.makedirs(os.path.join(output_dir), exist_ok=True)

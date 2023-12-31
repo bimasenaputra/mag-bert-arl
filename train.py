@@ -44,14 +44,14 @@ def set_up_data_loader():
     train_data = data["train"]
     train_dataset = get_appropriate_dataset(train_data, args.max_seq_length, args.tokenizer, VISUAL_DIM, ACOUSTIC_DIM)
     train_dataloader = DataLoader(
-        train_dataset, batch_size=args.train_batch_size, shuffle=True
+        train_dataset, batch_size=args.train_batch_size, shuffle=True, drop_last=True,
     )
 
     dev_data = data["dev"]
     if dev_data is not None:
         dev_dataset = get_appropriate_dataset(dev_data, args.max_seq_length, args.tokenizer, VISUAL_DIM, ACOUSTIC_DIM)
         dev_dataloader = DataLoader(
-            dev_dataset, batch_size=args.dev_batch_size, shuffle=True
+            dev_dataset, batch_size=args.dev_batch_size, shuffle=True, drop_last=True,
         )
     else:
         dev_dataloader = None
