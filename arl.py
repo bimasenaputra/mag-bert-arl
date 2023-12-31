@@ -31,14 +31,14 @@ class LearnerNN(nn.Module):
 
         all_layers.append(nn.Linear(n_hidden[-1], num_labels))
 
-        self.layers = nn.Sequential(*all_layers)
+        self.learner = nn.Sequential(*all_layers)
 
 
     def forward(self, features, targets=None):
         """
         The forward step for the learner.
         """
-        logits = self.layers(features)
+        logits = self.learner(features)
         outputs = (logits, )
 
         if targets is not None:
@@ -46,7 +46,6 @@ class LearnerNN(nn.Module):
             outputs = (loss, ) + outputs
 
         return outputs
-
 
 class AdversaryNN(nn.Module):
     def __init__(self, hidden_size, num_labels, n_hidden):
@@ -59,7 +58,6 @@ class AdversaryNN(nn.Module):
                     in each linear layer.
         """
         super().__init__()
-        self.device = device
         self.hidden_size = hidden_size
         self.num_labels = num_labels
         self.weights = None
@@ -73,13 +71,13 @@ class AdversaryNN(nn.Module):
 
         all_layers.append(nn.Linear(n_hidden[-1], num_labels))
 
-        self.layers = nn.Sequential(*all_layers)
+        self.adversary = nn.Sequential(*all_layers)
 
     def forward(self, features):
         """
         The forward step for the adversary.
         """
-        logits = self.layers(features)
+        logits = self.adversary(features)
         weights = self.compute_example_weights(logits)
         self.weights = weights
 
@@ -99,10 +97,9 @@ class AdversaryNN(nn.Module):
             mean_example_weights = example_weights.mean(dim=0)  
             example_weights /= torch.max(mean_example_weights, torch.tensor(1e-4)) 
             example_weights = torch.ones_like(example_weights) + example_weights 
-            class_weights = example_weights[torch.arange(example_weights.size(0)), labels] 
+            class_weights = example_weights[torch.arange(example_weights.size(0)), self.num_labels] 
 
             return class_weights
-
 
 class ARL(nn.Module):
 
@@ -153,7 +150,9 @@ class ARL(nn.Module):
 
         if targets is not None:
             batch_size = features.size(0)
+            device = learner_loss_raw.device
             adversary_weights = torch.ones(batch_size, self.num_labels) if self.pretrain else self.adversary(features)
+            adversary_weights = adversary_weights.to(device)
             loss = self.get_loss(learner_loss_raw, adversary_weights)
             outputs = loss + outputs
 
