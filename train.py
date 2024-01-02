@@ -11,7 +11,7 @@ from global_configs import ACOUSTIC_DIM, VISUAL_DIM, DEVICE, BERT_PRETRAINED_MOD
 from model import Seq2SeqModel
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dataset", type=str, choices=["mosi", "mosei"], default="mosi", help=".pkl file saved in ./dataset folder in { train: {(), }, test: {...}, dev (optional): {...}} format")
+parser.add_argument("--dataset", type=str, choices=["mosi", "mosei"], default="mosi", help="Pickle (.pkl) file saved in ./dataset folder in { train: {(), }, test: {...}, dev (optional): {...}} format")
 parser.add_argument("--max_seq_length", type=int, default=50, help="Maximum number of tokens the model can take in a single input")
 parser.add_argument("--train_batch_size", type=int, default=128, help="Batch size for training")
 parser.add_argument("--num_labels", type=int, default=1, help="Number of classes/labels to predict")
@@ -31,6 +31,8 @@ parser.add_argument("--save_model_every_epoch", type=str2bool, default="false", 
 parser.add_argument("--output_dir", type=str, default="saves", help="Output directory where the model will be saved")
 parser.add_argument("--learning_rate_adversary", type=float, default=1e-5, help="Learning rate for the adversary")
 parser.add_argument("--pretrain_steps", type=int, default=-1, help="Number of steps to pretrain the learner, -1 means no pretraining")
+parser.add_argument("--use_early_stopping", type=str2bool, default="false", help="Whether or not to use early stopping to mitigate too many epochs")
+parser.add_argument("--early_stopping_patience", type=int, default=-1, help="Number of steps until there is no improvement in validation loss")
 parser.add_argument("--use_cuda", type=str2bool, default="true", help="Use cuda for training")
 parser.add_argument("--cuda_device", type=int, default=0, help="Cuda device to use for training")
 parser.add_argument("--n_gpu", type=int, default=1, help="Number of GPU used for training")

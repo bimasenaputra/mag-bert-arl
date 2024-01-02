@@ -10,7 +10,7 @@ from global_configs import ACOUSTIC_DIM, VISUAL_DIM, DEVICE, BERT_PRETRAINED_MOD
 from model import Seq2SeqModel
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dataset", type=str, choices=["mosi", "mosei"], default="mosi", help=".pkl file saved in ./dataset folder in { train: {(), }, test: {...}, dev (optional): {...}} format")
+parser.add_argument("--dataset", type=str, choices=["mosi", "mosei"], default="mosi", help="Pickle (.pkl) file saved in ./dataset folder in { train: {(), }, test: {...}, dev (optional): {...}} format")
 parser.add_argument("--max_seq_length", type=int, default=50, help="Maximum number of tokens the model can take in a single input")
 parser.add_argument("--num_labels", type=int, default=1, help="Number of classes/labels to predict")
 parser.add_argument("--test_batch_size", type=int, default=128, help="Batch size for testing")
