@@ -379,17 +379,32 @@ class Seq2SeqModel:
         if self.model_type == "mag-bert-arl":
             assert self.args.train_batch_size == self.args.dev_batch_size
 
+        # Validation dataset must be present if early stopping is enabled
+        if self.args.use_early_stopping:
+            assert validation_dataloader is not None
+
         optimizer, scheduler = self.get_learner_optimizer()
         adv_optimizer, adv_scheduler = self.get_adversary_optimizer()
         global_step, epochs_trained, steps_trained_in_current_epoch = self.load_last_checkpoint(len(train_dataloader))
-        valid_losses = []
+        patience = 0
+        best_valid_loss = float('inf')
 
         for epoch_i in range(int(self.args.n_epochs)):
             if epochs_trained > 0:
                 epochs_trained -= 1
                 continue
             train_loss, global_step = self.train_epoch(train_dataloader, optimizer, scheduler, global_step, epoch_i, steps_trained_in_current_epoch, adv_optimizer, adv_scheduler)
-            valid_loss = self.eval_epoch(validation_dataloader) if validation_dataloader is not None else 0.0
+
+            if validation_dataloader is not None:
+                valid_loss = self.eval_epoch(validation_dataloader)
+                if self.args.use_early_stopping:
+                    if valid_loss < best_valid_loss:
+                        patience = 0
+                        best_valid_loss = valid_loss
+                    else:
+                        patience += 1
+            else:
+                valid_loss = float('inf')
 
             logging.info(
                 "epoch:{}, train_loss:{}, valid_loss:{}".format(
@@ -397,7 +412,10 @@ class Seq2SeqModel:
                 )
             )
 
-            valid_losses.append(valid_loss)
+            if self.args.use_early_stopping and patience > self.args.early_stopping_patience:
+                logging.info(f"Patience of {self.args.early_stopping_patience} steps reached.")
+                logging.info("Training terminated.")
+                break
 
         if not self.args.no_save:
             self.save_model(self.args.output_dir, optimizer, scheduler, adv_optimizer, adv_scheduler)
