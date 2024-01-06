@@ -211,7 +211,7 @@ class Seq2SeqModel:
         global_step_new = global_step
         tr_loss = 0
         nb_tr_examples, nb_tr_steps = 0, 0
-        for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
+        for step, batch in enumerate(tqdm(train_dataloader, desc=f"Epoch {epoch_number + 1} of {self.args.n_epochs}")):
             if steps_trained_in_current_epoch > 0:
                 steps_trained_in_current_epoch -= 1
                 continue
@@ -282,9 +282,10 @@ class Seq2SeqModel:
     def eval_epoch(self, dev_dataloader: DataLoader):
         self.model.eval()
         dev_loss = 0
+        dev_adv_loss = 0
         nb_dev_examples, nb_dev_steps = 0, 0
         with torch.no_grad():
-            for step, batch in enumerate(tqdm(dev_dataloader, desc="Iteration")):
+            for step, batch in enumerate(tqdm(dev_dataloader, desc=f"Epoch {epoch_number + 1} of {self.args.n_epochs}")):
                 batch = tuple(t.to(self.device) for t in batch)
 
                 input_ids, visual, acoustic, input_mask, segment_ids, label_ids = batch
@@ -308,9 +309,21 @@ class Seq2SeqModel:
                     loss = loss.mean()
 
                 dev_loss += loss.item()
+
+                if self.model_type == "mag-bert-arl":
+                    adv_loss = outputs[1]
+
+                    if self.args.gradient_accumulation_step > 1:
+                        adv_loss = adv_loss / self.args.gradient_accumulation_step
+
+                    if self.args.n_gpu:
+                        adv_loss = adv_loss.mean()
+
+                    dev_adv_loss += adv_loss.item()
+
                 nb_dev_steps += 1
 
-        return dev_loss / nb_dev_steps
+        return dev_loss / nb_dev_steps, dev_adv_loss / nb_dev_steps
 
     def test_epoch(self, test_dataloader: DataLoader):
         self.model.eval()
@@ -388,6 +401,7 @@ class Seq2SeqModel:
         global_step, epochs_trained, steps_trained_in_current_epoch = self.load_last_checkpoint(len(train_dataloader))
         patience = 0
         best_valid_loss = float('inf')
+        best_valid_adv_loss = float('inf')
 
         for epoch_i in range(int(self.args.n_epochs)):
             if epochs_trained > 0:
@@ -396,19 +410,23 @@ class Seq2SeqModel:
             train_loss, global_step = self.train_epoch(train_dataloader, optimizer, scheduler, global_step, epoch_i, steps_trained_in_current_epoch, adv_optimizer, adv_scheduler)
 
             if validation_dataloader is not None:
-                valid_loss = self.eval_epoch(validation_dataloader)
+                valid_loss, valid_adv_loss = self.eval_epoch(validation_dataloader)
                 if self.args.use_early_stopping:
-                    if valid_loss < best_valid_loss:
+                    if valid_loss < best_valid_loss or valid_adv_loss < best_valid_adv_loss:
                         patience = 0
-                        best_valid_loss = valid_loss
+                        if valid_loss < best_valid_loss:
+                            best_valid_loss = valid_loss
+                        if valid_adv_loss < best_valid_adv_loss:
+                            best_valid_adv_loss = valid_adv_loss
                     else:
                         patience += 1
             else:
                 valid_loss = float('inf')
+                valid_adv_loss = float('inf')
 
             logging.info(
-                "epoch:{}, train_loss:{}, valid_loss:{}".format(
-                    epoch_i, train_loss, valid_loss
+                "epoch:{}, train_loss:{}, valid_loss:{}, valid_adv_loss: {}".format(
+                    epoch_i, train_loss, valid_loss, valid_adv_loss
                 )
             )
 
