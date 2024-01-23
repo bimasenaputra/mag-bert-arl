@@ -49,7 +49,9 @@ with open("data.pkl", "rb") as handle:
 
 transcriptions = get_transcriptions()
 alignments = whisper_alignment.get_alignment(audios, transcriptions)
-alignments = segment_video_audio_files(video.files, audio.files, alignments, transcriptions, video_segment_folder, audio_segment_folder)
+
+video_files = [f.path for f in os.scandir(video_folder) if f.is_file()]
+alignments = segment_video_audio_files(video_files, audio.files, alignments, transcriptions, video_segment_folder, audio_segment_folder)
 
 
 
