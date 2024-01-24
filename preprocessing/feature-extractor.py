@@ -15,9 +15,8 @@ class FeatureExtractor(object):
         self.text_extractor = TextExtractor(aligments)
 
 class AcousticExtractor(object):
-    def __init__(self, path, aligments):
+    def __init__(self, path):
     	self.path = path
-        self.aligment = aligment
 
     def egemaps(self):
         # todo
@@ -34,7 +33,7 @@ class AcousticExtractor(object):
                 acoustic_features = smile.process_files(
                     filename
                 )    
-                features_list.append(features_list.append(acoustic_features.iloc[0].values.tolist()))
+                features_list.append(acoustic_features.iloc[0].values.tolist)
         features_array = np.array(features_list)
         return features_array
 
@@ -44,9 +43,8 @@ class AcousticExtractor(object):
         return features
 
 class VisualExtractor(object):
-    def __init__(self, path, aligments):
+    def __init__(self, path):
         self.path = path
-        self.aligment = aligment
 
     def cnn_lstm(self):
         # init
