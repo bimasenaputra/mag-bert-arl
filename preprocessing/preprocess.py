@@ -1,6 +1,4 @@
 import os
-import multiprocessing
-import spacy
 import pickle as pkl
 
 from fiv2 import AudioDataset
@@ -47,13 +45,24 @@ if not os.path.exists('data.pkl'):
 with open("data.pkl", "rb") as handle:
         data = pickle.load(handle)
 
+""" features """
 transcriptions = get_transcriptions()
 alignments = whisper_alignment.get_alignment(audios, transcriptions)
 
 video_files = [f.path for f in os.scandir(video_folder) if f.is_file()]
 alignments = segment_video_audio_files(video_files, audio.files, alignments, transcriptions, video_segment_folder, audio_segment_folder)
 
+feature_extractor = FeatureExtractor(video_segment_folder, audio_segment_folder, alignments)
+features = feature_extractor.extract()
 
+
+""" labels """
+# 1. get labels from annotation
+# 2. labels = [labels seg 1, labels seg 2, labels seg 3, ...]
+labels = None
+entry = features + labels
+
+data["train"] = entry
 
 with open('data.pkl', 'wb') as f:
     pkl.dump(data, f)

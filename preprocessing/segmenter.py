@@ -1,4 +1,3 @@
-import os
 import spacy
 
 from pydub import AudioSegment

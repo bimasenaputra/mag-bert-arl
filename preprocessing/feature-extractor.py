@@ -1,4 +1,5 @@
 import os
+import multiprocessing
 import cv2
 import opensmile
 import detectron2
@@ -10,9 +11,38 @@ from pyAudioAnalysis import MidTermFeatures as aF
 
 class FeatureExtractor(object):
     def __init__(self, video_path, audio_path, aligments):
-        self.visual_extractor = VisualExtractor(video_path, aligments)
-        self.acoustic_extractor = AcousticExtractor(audio_path, aligments)
+        self.path = video_path if video_path != "" else audio_path
+        self.visual_extractor = VisualExtractor(video_path)
+        self.acoustic_extractor = AcousticExtractor(audio_path)
         self.text_extractor = TextExtractor(aligments)
+
+    def extract(self, visual="cnn_lstm", acoustic="pyaudioanalysis", text="words"):
+        visual_features = None
+        acoustic_features = None
+        text_features = None
+
+        # visual
+        if visual == "cnn_lstm":
+            visual_features = self.visual_extractor.cnn_lstm()
+        elif visual == "open_face":
+            visual_features = self.visual_extractor.open_face()
+
+        # acoustic
+        if acoustic == "pyaudioanalysis":
+            acoustic_features = self.acoustic_extractor.pyaudioanalysis()
+        elif acoustic == "egemaps":
+            acoustic_features = self.acoustic_extractor.egemaps()
+
+        # text
+        if text == "words":
+            text_features = self.text_extractor.words()
+
+        # segments
+        segments_dir = [f.path for f in os.scandir(self.path) if f.is_dir()]
+        segments = [os.path.basename(dirname) for dirname in segments_dir]
+
+        features = [(text_features, acoustic_features, visual_features), segments]
+        return features
 
 class AcousticExtractor(object):
     def __init__(self, path):
@@ -23,6 +53,7 @@ class AcousticExtractor(object):
         smile = opensmile.Smile(
             feature_set=opensmile.FeatureSet.eGeMAPSv02,
             feature_level=opensmile.FeatureLevel.Functionals,
+            num_workers=multiprocessing.Pool()._processes
         )
         features_list = []
         path_list = [f.path for f in os.scandir(self.path) if f.is_dir()]
