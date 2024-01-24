@@ -64,9 +64,11 @@ class VisualExtractor(object):
         features_list = []
 
         for path in path_list:
+            segment_features_list = []
             video_files = [f.path for f in os.scandir(path) if f.is_file()]
             for filename in video_files:
                 if filename.endswith('.mp4'):
+                    averaged_features_list = []
                     # open the video
                     cap = cv2.VideoCapture(filename)                    
                     # counter
@@ -120,8 +122,10 @@ class VisualExtractor(object):
 
                     # Calculate the average of features outside the loop
                     averaged_features_array = np.mean(averaged_features_list, axis=0)
-                    features_list.append(averaged_features_array)
+                    segment_features_list.append(averaged_features_array)
 
+            segment_features_array = np.array(token_features_list)
+            features_list.append(segment_features_array)
         # Convert the list of averaged features to a numpy array
         features_array = np.array(features_list)
 
