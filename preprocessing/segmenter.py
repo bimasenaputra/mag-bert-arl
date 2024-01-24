@@ -21,7 +21,7 @@ def get_segments(alignment, transcription):
 	segments_time_windows = []
 	segment_alignments = []
 
-	l, r = 0, 1
+	i, l, r = 0, 0, 1
 
 	tokenized_sentences = []
 	tokenized_sentences_length = 0
@@ -37,27 +37,25 @@ def get_segments(alignment, transcription):
 	for (first_token, last_token) in tokenized_sentences:
 		segment_alignment = []
 
-		while l < len(alignment) and alignment[l]["word"] != first_token:
-			l += 1
+		assert alignment[l]["word"] == first_token
 
-		begin = alignment[l]
-		begin_time = begin["begin"]
-		segment_alignment.append(dict(word=first_token, begin=0, end=begin["end"] - begin_time))
+		segment_alignment.append(dict(word=first_token, begin=0, end=alignment[l]["end"] - alignment[l]["begin"]))
+		segments_time_windows.append((i, alignment[l]["begin"], alignment[l]["end"]))
 
 		r = l+1
 		while r < len(alignment) and alignment[r]["word"] != last_token:
-			current = alignment[r]
-			segment_alignment.append(dict(word=current["word"], begin=current["begin"] - begin_time, end=current["end"] - begin_time))
+			segment_alignment.append(dict(word=alignment[r]["word"], begin=0, end=alignment[r]["end"] - alignment[r]["begin"]))
+			segments_time_windows.append((i, alignment[r]["begin"], alignment[r]["end"]))
 			r += 1
 
-		end = alignment[r]
-		end_time = end["end"]
-		segment_alignment.append(dict(word=last_token, begin=end["begin"] - begin_time, end=end_time - begin_time))
+		segment_alignment.append(dict(word=last_token, begin=0, end=alignment[r]["end"] - alignment[r]["begin"]))
+		segments_time_windows.append((i, alignment[r]["begin"], alignment[r]["end"]))
 
-		segments_time_windows.append((begin, end))
+
 		segment_alignments.append(segment_alignment)
 
 		l = r+1
+		i += 1
 
 	return segments_time_windows, segment_alignments
 
@@ -65,34 +63,38 @@ def segment_audio_file(audio_file_path, segments_time_windows, output):
     audio = AudioSegment.from_file(audio_file_path)
     filename = os.path.basename(audio_file_path)
     output_file_path = "{path}/{name}".format(path=output, name=filename.removesuffix('.wav'))
+    idx = 0
 
-    for i, (begin, end) in enumerate(segments_time_windows):
+    for (i, begin, end) in enumerate(segments_time_windows):
     	audio_segment = audio[begin:end]
-    	audio_segment.export("{name}[{no}].wav".format(name=output_file_path, no=i), format="wav")
+    	audio_segment.export("{name}[{no}]/{name}[{no}][{idx}].wav".format(name=output_file_path, no=i, idx=idx), format="wav")
+    	idx += 1
 
 def segment_video_file(video_file_path, segments_time_windows, output):
     filename = os.path.basename(video_file_path)
     output_file_path = "{path}/{name}".format(path=output, name=filename.removesuffix('.mp4'))
+    idx = 0
 
-    for i, (begin, end) in enumerate(segments_time_windows):
-    	ffmpeg_extract_subclip(video_file_path, begin, end, targetname="{name}[{no}].mp4".format(name=output_file_path, no=i))
+    for (i, begin, end) in enumerate(segments_time_windows):
+    	ffmpeg_extract_subclip(video_file_path, begin, end, targetname="{name}[{no}]/{name}[{no}][{idx}].mp4".format(name=output_file_path, no=i, idx=idx))
+    	idx += 1
 
 def segment_video_audio_files(video_folder, audio_folder, alignments, transcriptions, output_video=None, output_audio=None):
 	if output_video is None:
-		output = video_folder
+		output_video = video_folder
 
 	if output_audio is None:
-		output = audio_folder
+		output_audio = audio_folder
 
 	segment_alignments = []
 	for i, (video_filename, audio_filename) in enumerate(zip(video_folder, audio_folder)):
 		segments_time_windows, segment_alignments_tmp = get_segments(alignments[i], transcriptions[i])
 		if video_filename.endswith('.mp4'):
 			video_file_path = os.path.join(video_folder, video_filename)
-			segment_video_file(video_file_path, segments_time_windows, output)
+			segment_video_file(video_file_path, segments_time_windows, output_video)
         if audio_filename.endswith('.wav'):
         	audio_file_path = os.path.join(audio_folder, audio_filename)
-            segment_audio_file(audio_file_path, segments_time_windows, output)
+            segment_audio_file(audio_file_path, segments_time_windows, output_audio)
         segment_alignments.extend(segment_alignments_tmp)
 
      return segment_alignments

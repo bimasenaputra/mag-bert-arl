@@ -8,8 +8,8 @@ class AudioDataset(object):
 
         for filename in sorted(os.listdir(audio_folder)):
         	if filename.endswith('.wav'):
-                files.append(filename)
         		audio_file_path = os.path.join(audio_folder, filename)
+                files.append(audio_file_path)
             	with open(audio_file_path, 'rb') as file:
             		audio_bytes = file.read()
             		all_audio.append(wavfile.read(io.BytesIO(audio_bytes))[1])
