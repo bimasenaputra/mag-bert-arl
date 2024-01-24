@@ -59,32 +59,31 @@ def get_segments(alignment, transcription):
 	return segments_time_windows, segment_alignments
 
 def segment_audio_file(audio_file_path, segments_time_windows, output):
-    audio = AudioSegment.from_file(audio_file_path)
-    filename = os.path.basename(audio_file_path)
-    output_file_path = "{path}/{name}".format(path=output, name=filename.removesuffix('.wav'))
-    idx = 0
-    last_i = 0
-
-    for (i, begin, end) in enumerate(segments_time_windows):
-    	audio_segment = audio[begin:end]
-    	audio_segment.export("{name}[{no}]/{name}[{no}][{idx}].wav".format(name=output_file_path, no=i, idx=idx), format="wav")
-    	if i == last_i:
-    		idx += 1
-    	else:
-    		idx = 0
+	audio = AudioSegment.from_file(audio_file_path)
+	filename = os.path.basename(audio_file_path)
+	output_file_path = "{path}/{name}".format(path=output, name=filename.removesuffix('.wav'))
+	idx = 0
+	last_i = 0
+	for (i, begin, end) in enumerate(segments_time_windows):
+		audio_segment = audio[begin:end]
+		audio_segment.export("{name}[{no}]/{name}[{no}][{idx}].wav".format(name=output_file_path, no=i, idx=idx), format="wav")
+		if i == last_i:
+			idx += 1
+		else:
+			idx = 0
 
 def segment_video_file(video_file_path, segments_time_windows, output):
-    filename = os.path.basename(video_file_path)
-    output_file_path = "{path}/{name}".format(path=output, name=filename.removesuffix('.mp4'))
-    idx = 0
-    last_i = 0
-
-    for (i, begin, end) in enumerate(segments_time_windows):
-    	ffmpeg_extract_subclip(video_file_path, begin, end, targetname="{name}[{no}]/{name}[{no}][{idx}].mp4".format(name=output_file_path, no=i, idx=idx))
-    	if i == last_i:
-    		idx += 1
-    	else:
-    		idx = 0
+	filename = os.path.basename(video_file_path)
+	output_file_path = "{path}/{name}".format(path=output, name=filename.removesuffix('.mp4'))
+	idx = 0
+	last_i = 0
+	
+	for (i, begin, end) in enumerate(segments_time_windows):
+		ffmpeg_extract_subclip(video_file_path, begin, end, targetname="{name}[{no}]/{name}[{no}][{idx}].mp4".format(name=output_file_path, no=i, idx=idx))
+		if i == last_i:
+			idx += 1
+		else:
+			idx = 0
 
 def segment_video_audio_files(video_folder, audio_folder, alignments, transcriptions, output_video=None, output_audio=None):
 	if output_video is None:
@@ -98,8 +97,7 @@ def segment_video_audio_files(video_folder, audio_folder, alignments, transcript
 		segments_time_windows, segment_alignments_tmp = get_segments(alignments[i], transcriptions[i])
 		if video_filename.endswith('.mp4'):
 			segment_video_file(video_filename, segments_time_windows, output_video)
-        if audio_filename.endswith('.wav'):
-            segment_audio_file(audio_filename, segments_time_windows, output_audio)
-        segment_alignments.extend(segment_alignments_tmp)
-
-     return segment_alignments
+		if audio_filename.endswith('.wav'):
+			segment_audio_file(audio_filename, segments_time_windows, output_audio)
+		segment_alignments.extend(segment_alignments_tmp)
+	return segment_alignments

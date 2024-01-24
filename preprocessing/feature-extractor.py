@@ -58,8 +58,8 @@ class FeatureExtractor(object):
 
 class AcousticExtractor(object):
     def __init__(self, path):
-    	self.path = path
-
+        self.path = path
+        
     def egemaps(self):
         # todo
         smile = opensmile.Smile(

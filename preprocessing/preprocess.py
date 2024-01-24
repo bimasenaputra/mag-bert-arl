@@ -5,6 +5,7 @@ from fiv2 import AudioDataset
 from alignment import WhisperAlignment
 from segmenter import segment_video_audio_files
 from FeatureExtractor import FeatureExtractor
+import whisper
 """
 format dataset:
 {
@@ -21,11 +22,11 @@ label_id (float / numpy.ndarray): Label for data point
 segment (str): Unique identifier for each data point
 """
 
-video_folder = os.path.expanduser("~/video/")
-audio_folder = os.path.expanduser("~/audio/")
-video_segment_folder = os.path.expanduser("~/video-seg/")
-audio_segment_folder = os.path.expanduser("~/audio-seg/")
-annotation_file = os.path.expanduser("~/labels/")
+video_folder = os.path.expanduser("~sakura_science_intern_dataset/videos/")
+audio_folder = os.path.expanduser("~sakura_science_intern_dataset/audios/")
+video_segment_folder = os.path.expanduser("~sakura_science_intern_dataset/video-seg/")
+audio_segment_folder = os.path.expanduser("~sakura_science_intern_dataset/audio-seg/")
+annotation_file = os.path.expanduser("~sakura_science_intern_dataset/labels/")
 
 whisper_model = whisper.load_model("base")
 whisper_alignment = WhisperAlignment(whisper_model, "english")
