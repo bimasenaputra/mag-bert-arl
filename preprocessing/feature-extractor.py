@@ -25,14 +25,18 @@ class AcousticExtractor(object):
             feature_set=opensmile.FeatureSet.eGeMAPSv02,
             feature_level=opensmile.FeatureLevel.Functionals,
         )
+        features_list = []
+        path_list = [f.path for f in os.scandir(self.path) if f.is_dir()]
 
-        for i, aligment in enumerate(alignments):
-            audio_filename = audios.files[i]
-
-            acoustic_features = smile.process_files(
-                audio.files,
-                root=audio.root,
-            )    
+        for path in path_list:
+            audio_files = [f.path for f in os.scandir(path) if f.is_file()]
+            for filename in audio_files:
+                acoustic_features = smile.process_files(
+                    filename
+                )    
+                features_list.append(features_list.append(acoustic_features.iloc[0].values.tolist()))
+        features_array = np.array(features_list)
+        return features_array
 
     def pyaudioanalysis(self):
         path_list = [f.path for f in os.scandir(self.path) if f.is_dir()]
@@ -137,4 +141,4 @@ class TextExtractor(object):
         for alignment in aligments:
             words.append([word_aligment["word"] for word_aligment in aligment])
 
-        return words
+        return words 
