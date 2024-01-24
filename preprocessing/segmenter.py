@@ -90,11 +90,9 @@ def segment_video_audio_files(video_folder, audio_folder, alignments, transcript
 	for i, (video_filename, audio_filename) in enumerate(zip(video_folder, audio_folder)):
 		segments_time_windows, segment_alignments_tmp = get_segments(alignments[i], transcriptions[i])
 		if video_filename.endswith('.mp4'):
-			video_file_path = os.path.join(video_folder, video_filename)
-			segment_video_file(video_file_path, segments_time_windows, output_video)
+			segment_video_file(video_filename, segments_time_windows, output_video)
         if audio_filename.endswith('.wav'):
-        	audio_file_path = os.path.join(audio_folder, audio_filename)
-            segment_audio_file(audio_file_path, segments_time_windows, output_audio)
+            segment_audio_file(audio_filename, segments_time_windows, output_audio)
         segment_alignments.extend(segment_alignments_tmp)
 
      return segment_alignments
