@@ -6,7 +6,7 @@ class AudioDataset(object):
         length = 0
         files = []
 
-        for filename in sorted(os.listdir(audio_folder)):
+        for filename in sorted(os.listdir(audio_folder), key=lambda x: x.name):
         	if filename.endswith('.wav'):
         		audio_file_path = os.path.join(audio_folder, filename)
                 files.append(audio_file_path)

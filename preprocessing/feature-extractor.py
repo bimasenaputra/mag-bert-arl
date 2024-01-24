@@ -11,7 +11,7 @@ from pyAudioAnalysis import MidTermFeatures as aF
 
 class FeatureExtractor(object):
     def __init__(self, video_path, audio_path, aligments):
-        self.path = video_path if video_path != "" else audio_path
+        self.path = video_path
         self.visual_extractor = VisualExtractor(video_path)
         self.acoustic_extractor = AcousticExtractor(audio_path)
         self.text_extractor = TextExtractor(aligments)
@@ -38,8 +38,20 @@ class FeatureExtractor(object):
             text_features = self.text_extractor.words()
 
         # segments
-        segments_dir = [f.path for f in os.scandir(self.path) if f.is_dir()]
-        segments = [os.path.basename(dirname) for dirname in segments_dir]
+        segments_dir = [f.path for f in sorted(os.scandir(self.path), key=lambda x: x.name) if f.is_dir()]
+        segments = []
+
+        for dirname in segments_dir:
+            base_name = os.path.basename(dirname)
+            files = [f.name for f in os.scandir(dirname) if f.is_file()]
+
+            for idx, filename in enumerate(files):
+                segments_name = f"{base_name}[{idx}]"
+                segments.append(segments_name)
+
+        assert len(text_features) == len(segments)
+        assert len(visual_features) == len(acoustic_features)
+        assert len(visual_features) == len(text_features)
 
         features = [(text_features, acoustic_features, visual_features), segments]
         return features
@@ -56,10 +68,10 @@ class AcousticExtractor(object):
             num_workers=multiprocessing.Pool()._processes
         )
         features_list = []
-        path_list = [f.path for f in os.scandir(self.path) if f.is_dir()]
+        path_list = [f.path for f in sorted(os.scandir(self.path), key=lambda x: x.name) if f.is_dir()]
 
         for path in path_list:
-            audio_files = [f.path for f in os.scandir(path) if f.is_file()]
+            audio_files = [f.path for f in sorted(os.scandir(path), key=lambda x: x.name) if f.is_file()]
             for filename in audio_files:
                 acoustic_features = smile.process_files(
                     filename
@@ -69,7 +81,7 @@ class AcousticExtractor(object):
         return features_array
 
     def pyaudioanalysis(self):
-        path_list = [f.path for f in os.scandir(self.path) if f.is_dir()]
+        path_list = [f.path for f in sorted(os.scandir(self.path), key=lambda x: x.name) if f.is_dir()]
         features = aF.multiple_directory_feature_extraction(path_list, , 1, 1, 0.02, 0.02, compute_beat=False) 
         return features
 
@@ -79,7 +91,7 @@ class VisualExtractor(object):
 
     def cnn_lstm(self):
         # init
-        path_list = [f.path for f in os.scandir(self.path) if f.is_dir()]
+        path_list = [f.path for f in sorted(os.scandir(self.path), key=lambda x: x.name) if f.is_dir()]
 
         cfg = get_cfg()
         SKIP_FRAME_COUNT = 0
@@ -94,7 +106,7 @@ class VisualExtractor(object):
 
         for path in path_list:
             segment_features_list = []
-            video_files = [f.path for f in os.scandir(path) if f.is_file()]
+            video_files = [f.path for f in sorted(os.scandir(path), key=lambda x: x.name) if f.is_file()]
             for filename in video_files:
                 if filename.endswith('.mp4'):
                     averaged_features_list = []

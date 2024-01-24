@@ -25,6 +25,8 @@ video_folder = os.path.expanduser("~/video/")
 audio_folder = os.path.expanduser("~/audio/")
 video_segment_folder = os.path.expanduser("~/video-seg/")
 audio_segment_folder = os.path.expanduser("~/audio-seg/")
+annotation_file = os.path.expanduser("~/labels/")
+
 whisper_model = whisper.load_model("base")
 whisper_alignment = WhisperAlignment(whisper_model, "english")
 audios = AudioDataset(audio_folder)
@@ -43,13 +45,13 @@ if not os.path.exists('data.pkl'):
     os.mknod('data.pkl')
 
 with open("data.pkl", "rb") as handle:
-        data = pickle.load(handle)
+    data = pickle.load(handle)
 
 """ features """
 transcriptions = get_transcriptions()
 alignments = whisper_alignment.get_alignment(audios, transcriptions)
 
-video_files = [f.path for f in os.scandir(video_folder) if f.is_file()]
+video_files = [f.path for f in sorted(os.scandir(video_folder), key=lambda x: x.name) if f.is_file()]
 alignments = segment_video_audio_files(video_files, audio.files, alignments, transcriptions, video_segment_folder, audio_segment_folder)
 
 feature_extractor = FeatureExtractor(video_segment_folder, audio_segment_folder, alignments)
@@ -57,12 +59,23 @@ features = feature_extractor.extract()
 
 
 """ labels """
-# 1. get labels from annotation
-# 2. labels = [labels seg 1, labels seg 2, labels seg 3, ...]
-labels = None
-entry = features + labels
+with open(annotation_file, "rb") as handle:
+    annotation = pickle.load(handle, encoding='latin1')["interview"]
 
-data["train"] = entry
+segments_dir = [f.path for f in sorted(os.scandir(video_segment_folder), key=lambda x: x.name) if f.is_dir()]
+labels = []
+
+for dirname in segments_dir:
+    base_name = os.path.basename(dirname).split("[")[0]
+    key_name = basename + ".mp4"
+    labels.append(annotation[key_name])
+
+assert len(labels) == len(features[1])
+
+entry = features + [labels]
+transposed_entry = [[row[i] for row in entry] for i in range(len(entry[0]))]
+
+data["train"] = transposed_entry
 
 with open('data.pkl', 'wb') as f:
     pkl.dump(data, f)
