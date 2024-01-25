@@ -1,5 +1,7 @@
 from pydub import AudioSegment
 from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
+import os
+import pandas as pd
 
 def segment_audio_file(audio_file_path, segments_time_windows, output):
 	audio = AudioSegment.from_file(audio_file_path)
@@ -35,8 +37,28 @@ def segment_video_audio_files(video_folder, audio_folder, segment_time_windows, 
 	if output_audio is None:
 		output_audio = audio_folder
 
-	for i, (video_filename, audio_filename) in enumerate(zip(video_folder, audio_folder, segments_time_windows)):
+	for i, (video_filename, audio_filename) in enumerate(zip(video_folder, audio_folder, segment_time_windows)):
 		if video_filename.endswith('.mp4'):
 			segment_video_file(video_filename, segment_time_windows[i], output_video)
 		if audio_filename.endswith('.wav'):
 			segment_audio_file(audio_filename, segment_time_windows[i], output_audio)
+
+
+# return a list of vector for each segmented file
+def segment_csv_file(audio_file, segments_time_windows, csv_dir, buffer_milliseconds = 0.333, columns_to_drop = 5):
+
+	df = pd.read_csv(csv_dir + "/" + audio_file + ".csv")
+	
+	for (i, begin, end) in enumerate(segments_time_windows):
+		begin_adjusted = begin - buffer_milliseconds/2
+		end_adjusted = end + buffer_milliseconds/2
+		# Calculate the mean of all rows in the filtered DataFrame
+		mask = (df['frame'] * buffer_milliseconds > begin_adjusted) & (df['frame'] * buffer_milliseconds < end_adjusted)
+		mean_values = df[mask].mean(axis=0)
+		# Convert the mean values to a list
+		mean_list = mean_values.tolist()
+		# Drop the first 5 elements from the list
+		mean_list = mean_list[:columns_to_drop]
+
+	return mean_list
+		

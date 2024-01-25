@@ -71,7 +71,7 @@ labels = []
 
 for dirname in segments_dir:
     base_name = os.path.basename(dirname).split("[")[0]
-    key_name = basename + ".mp4"
+    key_name = base_name + ".mp4"
     labels.append(annotation[key_name])
 
 assert len(labels) == len(features[1])

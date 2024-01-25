@@ -3,8 +3,9 @@ import multiprocessing
 import cv2
 import opensmile
 import detectron2
-import numpy
+import numpy as np
 import torch.nn as nn
+import torch
 
 from detectron2 import model_zoo
 from detectron2.engine import DefaultPredictor
