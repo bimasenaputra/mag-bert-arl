@@ -1,11 +1,10 @@
 import os
+import torch
 import pickle as pkl
+import whisper_timestamped as whisper
 
-from fiv2 import AudioDataset
-from alignment import WhisperAlignment
 from segmenter import segment_video_audio_files
 from feature_extractor import FeatureExtractor
-import whisper
 """
 format dataset:
 {
@@ -22,40 +21,44 @@ label_id (float / numpy.ndarray): Label for data point
 segment (str): Unique identifier for each data point
 """
 
-video_folder = os.path.expanduser("~/sakura_science_intern_dataset/videos/")
-audio_folder = os.path.expanduser("~/sakura_science_intern_dataset/audios/")
-video_segment_folder = os.path.expanduser("~/sakura_science_intern_dataset/video-seg/")
-audio_segment_folder = os.path.expanduser("~/sakura_science_intern_dataset/audio-seg/")
-annotation_file = os.path.expanduser("~/sakura_science_intern_dataset/labels/")
+video_folder = os.path.expanduser("~/videos/")
+audio_folder = os.path.expanduser("~/audios/")
+video_segment_folder = os.path.expanduser("~/video-seg/")
+audio_segment_folder = os.path.expanduser("~/audio-seg/")
+annotation_file = os.path.expanduser("~/labels/")
+audio_files = [f.path for f in sorted(os.scandir(video_folder), key=lambda x: x.name) if f.is_file()]
+video_files = [f.path for f in sorted(os.scandir(audio_folder), key=lambda x: x.name) if f.is_file()]
 
-whisper_model = whisper.load_model("base")
-whisper_alignment = WhisperAlignment(whisper_model, "english")
-audios = AudioDataset(audio_folder)
+device = "cuda" if torch.cuda.is_available() else "cpu"
+language = "en"
+whisper_model = whisper.load_model("NbAiLab/whisper-large-v2-nob", device=device)
 
-def get_transcriptions():
-    transcriptions = []
-    for filename in audios.files:
+def get_segments():
+    segment_time_windows = []
+    segment_alignments = []
+    for filename in audios_files:
         if filename.endswith('.wav'):
-            audio_file_path = os.path.join(audio_folder, filename)
-            transcription = whisper_model.transcribe(audio_file_path, fp16=False)
-            transcriptions.append(transcription)
+            result = whisper.transcribe(whisper_model, filename, language=language)
+            for i, segment in enumerate(sorted(result['segments'], key=lambda x: x['id'])):
+                for word in segment["words"]:
+                    segment_time_windows.append((i, word["start"], word["end"]))
+                    # avoid precision error
+                    segment_alignments.append(dict(text=word["text"], start=0, end=((1000*word["end"])-(1000*word["start"]))/1000))
 
-    return transcriptions
+    return segment_time_windows, segment_alignments
 
 if not os.path.exists('data.pkl'):
-    os.mknod('data.pkl')
+    data = {}
+    with open('data.pkl', 'wb') as f:
+        pkl.dump(data, f)
 
 with open("data.pkl", "rb") as handle:
     data = pkl.load(handle)
 
 """ features """
-transcriptions = get_transcriptions()
-alignments = whisper_alignment.get_alignment(audios, transcriptions)
-
-video_files = [f.path for f in sorted(os.scandir(video_folder), key=lambda x: x.name) if f.is_file()]
-alignments = segment_video_audio_files(video_files, audio.files, alignments, transcriptions, video_segment_folder, audio_segment_folder)
-
-feature_extractor = FeatureExtractor(video_segment_folder, audio_segment_folder, alignments)
+segment_time_windows, segment_alignments = get_segments()
+segment_video_audio_files(video_files, audio_files, segment_time_windows, video_segment_folder, audio_segment_folder)
+feature_extractor = FeatureExtractor(video_segment_folder, audio_segment_folder, segment_alignments)
 features = feature_extractor.extract()
 
 

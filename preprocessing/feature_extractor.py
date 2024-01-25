@@ -4,6 +4,7 @@ import cv2
 import opensmile
 import detectron2
 import numpy
+import torch.nn as nn
 
 from detectron2 import model_zoo
 from detectron2.engine import DefaultPredictor

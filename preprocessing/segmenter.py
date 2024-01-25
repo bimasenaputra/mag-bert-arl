@@ -1,63 +1,5 @@
-import spacy
-
 from pydub import AudioSegment
 from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
-import en_core_web_sm
-nlp = en_core_web_sm.load()
-
-
-def segment_transcription(transcription):
-	doc = nlp(transcription)
-	sentences = [sent.text for sent in doc.sents]
-	return sentences
-
-def segment_sentence(sentence):
-	doc = nlp(transcription)
-	tokens = [token for token in doc if not token.is_stop]
-	return tokens
-
-def get_segments(alignment, transcription):
-	sentences = segment_transcription(transcription)
-	segments_time_windows = []
-	segment_alignments = []
-
-	i, l, r = 0, 0, 1
-
-	tokenized_sentences = []
-	tokenized_sentences_length = 0
-
-	for sentence in sentences:
-		tokens = segment_sentence(sentence)
-		assert len(tokens) > 1
-		tokenized_sentences_length += len(tokens)
-		tokenized_sentences.append((tokens[0], tokens[-1]))
-
-	assert tokenized_sentences_length == len(alignment)
-
-	for (first_token, last_token) in tokenized_sentences:
-		segment_alignment = []
-
-		assert alignment[l]["word"] == first_token
-
-		segment_alignment.append(dict(word=first_token, begin=0, end=alignment[l]["end"] - alignment[l]["begin"]))
-		segments_time_windows.append((i, alignment[l]["begin"], alignment[l]["end"]))
-
-		r = l+1
-		while r < len(alignment) and alignment[r]["word"] != last_token:
-			segment_alignment.append(dict(word=alignment[r]["word"], begin=0, end=alignment[r]["end"] - alignment[r]["begin"]))
-			segments_time_windows.append((i, alignment[r]["begin"], alignment[r]["end"]))
-			r += 1
-
-		segment_alignment.append(dict(word=last_token, begin=0, end=alignment[r]["end"] - alignment[r]["begin"]))
-		segments_time_windows.append((i, alignment[r]["begin"], alignment[r]["end"]))
-
-
-		segment_alignments.append(segment_alignment)
-
-		l = r+1
-		i += 1
-
-	return segments_time_windows, segment_alignments
 
 def segment_audio_file(audio_file_path, segments_time_windows, output):
 	audio = AudioSegment.from_file(audio_file_path)
@@ -86,19 +28,15 @@ def segment_video_file(video_file_path, segments_time_windows, output):
 		else:
 			idx = 0
 
-def segment_video_audio_files(video_folder, audio_folder, alignments, transcriptions, output_video=None, output_audio=None):
+def segment_video_audio_files(video_folder, audio_folder, segment_time_windows, output_video=None, output_audio=None):
 	if output_video is None:
 		output_video = video_folder
 
 	if output_audio is None:
 		output_audio = audio_folder
 
-	segment_alignments = []
-	for i, (video_filename, audio_filename) in enumerate(zip(video_folder, audio_folder)):
-		segments_time_windows, segment_alignments_tmp = get_segments(alignments[i], transcriptions[i])
+	for i, (video_filename, audio_filename) in enumerate(zip(video_folder, audio_folder, segments_time_windows)):
 		if video_filename.endswith('.mp4'):
-			segment_video_file(video_filename, segments_time_windows, output_video)
+			segment_video_file(video_filename, segment_time_windows[i], output_video)
 		if audio_filename.endswith('.wav'):
-			segment_audio_file(audio_filename, segments_time_windows, output_audio)
-		segment_alignments.extend(segment_alignments_tmp)
-	return segment_alignments
+			segment_audio_file(audio_filename, segment_time_windows[i], output_audio)
