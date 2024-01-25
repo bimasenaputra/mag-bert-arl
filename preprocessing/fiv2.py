@@ -1,11 +1,14 @@
 import os
+import io
+from scipy.io import wavfile  # Make sure to install scipy if not already installed
+import torch
 
 class AudioDataset(object):
 	def __init__(self, audio_folder):
 		all_audio = []
 		length = 0
 		files = []
-		for filename in sorted(os.listdir(audio_folder), key=lambda x: x.name):
+		for filename in sorted(os.listdir(audio_folder)):
 			if filename.endswith('.wav'):
 				audio_file_path = os.path.join(audio_folder, filename)
 				files.append(audio_file_path)

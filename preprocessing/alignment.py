@@ -5,6 +5,9 @@ from IPython.display import display, HTML
 from whisper.tokenizer import get_tokenizer
 from dtw import dtw
 from scipy.ndimage import median_filter
+import torch
+
+
 
 AUDIO_SAMPLES_PER_TOKEN = whisper.audio.HOP_LENGTH * 2
 AUDIO_TIME_PER_TOKEN = AUDIO_SAMPLES_PER_TOKEN / whisper.audio.SAMPLE_RATE

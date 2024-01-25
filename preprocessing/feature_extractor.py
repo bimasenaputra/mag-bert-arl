@@ -3,6 +3,7 @@ import multiprocessing
 import cv2
 import opensmile
 import detectron2
+import numpy
 
 from detectron2 import model_zoo
 from detectron2.engine import DefaultPredictor
@@ -82,7 +83,7 @@ class AcousticExtractor(object):
 
     def pyaudioanalysis(self):
         path_list = [f.path for f in sorted(os.scandir(self.path), key=lambda x: x.name) if f.is_dir()]
-        features = aF.multiple_directory_feature_extraction(path_list, , 1, 1, 0.02, 0.02, compute_beat=False) 
+        features = aF.multiple_directory_feature_extraction(path_list , 1, 1, 0.02, 0.02, compute_beat=False) 
         return features
 
 class VisualExtractor(object):

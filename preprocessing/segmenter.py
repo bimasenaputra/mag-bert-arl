@@ -2,8 +2,9 @@ import spacy
 
 from pydub import AudioSegment
 from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
+import en_core_web_sm
+nlp = en_core_web_sm.load()
 
-nlp = spacy.load("en_core_web_sm")
 
 def segment_transcription(transcription):
 	doc = nlp(transcription)
