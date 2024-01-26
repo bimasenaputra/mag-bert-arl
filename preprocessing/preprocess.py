@@ -37,7 +37,7 @@ whisper_model = whisper.load_model("tiny", device=device)
 def get_segments():
     segment_time_windows = []
     segment_alignments = []
-    for filename in tqdm(audios_files):
+    for filename in tqdm(audio_files):
         if filename.endswith('.wav'):
             result = whisper.transcribe(whisper_model, filename, language=language)
             for i, segment in enumerate(sorted(result['segments'], key=lambda x: x['id'])):
