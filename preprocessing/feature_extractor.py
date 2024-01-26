@@ -20,42 +20,36 @@ class FeatureExtractor(object):
         self.acoustic_extractor = AcousticExtractor(audio_path)
         self.text_extractor = TextExtractor(alignments)
 
-    def extract(self, visual="cnn_lstm", acoustic="pyaudioanalysis", text="words"):
-        visual_features = None
-        acoustic_features = None
-        text_features = None
-
+    def extract(self, visual=None, acoustic=None, text=None, visual_features=None, acoustic_features = None, text_features = None):
         # visual
-        if visual == "cnn_lstmi":
+        if visual == "cnn_lstm":
             visual_features = self.visual_extractor.cnn_lstm()
         elif visual == "open_face":
             visual_features = self.visual_extractor.open_face()
+        else:
+            assert visual_features is not None
 
         # acoustic
         if acoustic == "pyaudioanalysis":
             acoustic_features = self.acoustic_extractor.pyaudioanalysis()
         elif acoustic == "egemaps":
             acoustic_features = self.acoustic_extractor.egemaps()
+        else:
+            assert acoustic_features is not None
 
         # text
         if text == "words":
             text_features = self.text_extractor.words()
+        else:
+            assert text_features is not None
 
         # segments
         segments_dir = [f.path for f in sorted(os.scandir(self.path), key=lambda x: x.name) if f.is_dir()]
-        segments = []
+        segments = [os.path.split(dirname)[1] for dirname in segments_dir]
 
-        for dirname in segments_dir:
-            _, base_name = os.path.split(dirname)
-            files = [f.name for f in os.scandir(dirname) if f.is_file()]
-
-            for idx, filename in enumerate(files):
-                segments_name = f"{base_name}[{idx}]"
-                segments.append(segments_name)
-        print(len(segments))
         assert len(text_features) == len(segments)
-        #assert len(visual_features) == len(acoustic_features)
-        #assert len(visual_features) == len(text_features)
+        assert len(visual_features) == len(acoustic_features)
+        assert len(visual_features) == len(text_features)
 
         features = [(text_features, acoustic_features, visual_features), segments]
         return features
