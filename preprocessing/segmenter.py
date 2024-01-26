@@ -1,7 +1,9 @@
-from pydub import AudioSegment
-from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
 import os
 import pandas as pd
+import tqdm
+
+from pydub import AudioSegment
+from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
 
 def segment_audio_file(audio_file_path, segments_time_windows, output):
 	audio = AudioSegment.from_file(audio_file_path)
@@ -9,7 +11,7 @@ def segment_audio_file(audio_file_path, segments_time_windows, output):
 	output_file_path = "{path}/{name}".format(path=output, name=filename.removesuffix('.wav'))
 	idx = 0
 	last_i = 0
-	for (i, begin, end) in enumerate(segments_time_windows):
+	for (i, begin, end) in segments_time_windows:
 		audio_segment = audio[begin:end]
 		audio_segment.export("{name}[{no}]/{name}[{no}][{idx}].wav".format(name=output_file_path, no=i, idx=idx), format="wav")
 		if i == last_i:
@@ -23,7 +25,7 @@ def segment_video_file(video_file_path, segments_time_windows, output):
 	idx = 0
 	last_i = 0
 	
-	for (i, begin, end) in enumerate(segments_time_windows):
+	for (i, begin, end) in segments_time_windows:
 		ffmpeg_extract_subclip(video_file_path, begin, end, targetname="{name}[{no}]/{name}[{no}][{idx}].mp4".format(name=output_file_path, no=i, idx=idx))
 		if i == last_i:
 			idx += 1
@@ -37,7 +39,7 @@ def segment_video_audio_files(video_folder, audio_folder, segment_time_windows, 
 	if output_audio is None:
 		output_audio = audio_folder
 
-	for i, (video_filename, audio_filename) in enumerate(zip(video_folder, audio_folder, segment_time_windows)):
+	for i, (video_filename, audio_filename) in enumerate(tqdm(zip(video_folder, audio_folder))):
 		if video_filename.endswith('.mp4'):
 			segment_video_file(video_filename, segment_time_windows[i], output_video)
 		if audio_filename.endswith('.wav'):
@@ -49,7 +51,7 @@ def segment_csv_file(audio_file, segments_time_windows, csv_dir, buffer_millisec
 
 	df = pd.read_csv(csv_dir + "/" + audio_file + ".csv")
 	
-	for (i, begin, end) in enumerate(segments_time_windows):
+	for (_, begin, end) in segments_time_windows:
 		begin_adjusted = begin - buffer_milliseconds/2
 		end_adjusted = end + buffer_milliseconds/2
 		# Calculate the mean of all rows in the filtered DataFrame

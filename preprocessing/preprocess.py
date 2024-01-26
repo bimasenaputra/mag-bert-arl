@@ -2,6 +2,7 @@ import os
 import torch
 import pickle as pkl
 import whisper_timestamped as whisper
+import tqdm
 
 from segmenter import segment_video_audio_files
 from feature_extractor import FeatureExtractor
@@ -26,17 +27,17 @@ audio_folder = os.path.expanduser("~/audios/")
 video_segment_folder = os.path.expanduser("~/video-seg/")
 audio_segment_folder = os.path.expanduser("~/audio-seg/")
 annotation_file = os.path.expanduser("~/labels/")
-audio_files = [f.path for f in sorted(os.scandir(video_folder), key=lambda x: x.name) if f.is_file()]
-video_files = [f.path for f in sorted(os.scandir(audio_folder), key=lambda x: x.name) if f.is_file()]
+video_files = [f.path for f in sorted(os.scandir(video_folder), key=lambda x: x.name) if f.is_file()]
+audio_files = [f.path for f in sorted(os.scandir(audio_folder), key=lambda x: x.name) if f.is_file()]
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 language = "en"
-whisper_model = whisper.load_model("NbAiLab/whisper-large-v2-nob", device=device)
+whisper_model = whisper.load_model("tiny", device=device)
 
 def get_segments():
     segment_time_windows = []
     segment_alignments = []
-    for filename in audios_files:
+    for filename in tqdm(audios_files):
         if filename.endswith('.wav'):
             result = whisper.transcribe(whisper_model, filename, language=language)
             for i, segment in enumerate(sorted(result['segments'], key=lambda x: x['id'])):
@@ -45,6 +46,10 @@ def get_segments():
                     # avoid precision error
                     segment_alignments.append(dict(text=word["text"], start=0, end=((1000*word["end"])-(1000*word["start"]))/1000))
 
+    with open('segment_time_windows.pkl', 'wb') as f:
+        pkl.dump(segment_time_windows, f)
+    with open('segment_alignments.pkl', 'wb') as f:
+        pkl.dump(segment_alignments, f)
     return segment_time_windows, segment_alignments
 
 if not os.path.exists('data.pkl'):
