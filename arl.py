@@ -144,7 +144,10 @@ class ARL(nn.Module):
         """
         The forward step for the ARL.
         """
-        learner_loss_raw, learner_logits = self.learner(features, targets)
+        if targets is None:
+                learner_logits, = self.learner(features)
+        else:
+                learner_loss_raw, learner_logits = self.learner(features, targets)
         
         outputs = (learner_logits,)
 

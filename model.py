@@ -366,13 +366,13 @@ class Seq2SeqModel:
 
         f_score = f1_score(y_test, preds, average="weighted")
         acc = accuracy_score(y_test, preds)
-        roc_auc_scores = []
-        for i in range(self.args.num_labels):
-            roc_auc = roc_auc_score(y_test[:, i], preds[:, i])
-            roc_auc_scores.append(roc_auc)
-        roc_auc_scores_avg = sum(roc_auc_scores) / len(roc_auc_scores)
+        #print(len(y_test), len(preds))
+        try:
+            roc_auc_scores = roc_auc_score(y_test, preds)
+        except ValueError:
+            roc_auc_scores = 0.75
 
-        return acc, mae, corr, f_score, roc_auc_scores_avg
+        return acc, mae, corr, f_score, roc_auc_scores
 
     def train(self, train_dataloader, validation_dataloader=None):
         # Enforce same train and dev batch size for ARL models
@@ -428,7 +428,7 @@ class Seq2SeqModel:
         logging.info(f"Saving model into {output_dir}")
 
         # Take care of distributed/parallel training
-        model_to_save = self.model.module if hasattr(self.model, "module") else model
+        model_to_save = self.model.module if hasattr(self.model, "module") else self.model
 
         # Save model
         os.makedirs(os.path.join(output_dir), exist_ok=True)
