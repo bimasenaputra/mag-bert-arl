@@ -23,9 +23,11 @@ def convert_to_features(examples, max_seq_length, tokenizer, visual_dim, acousti
     for (ex_index, example) in enumerate(examples):
 
         (words, visual, acoustic), label_id, segment = example
-
+        
         tokens, inversions = [], []
         for idx, word in enumerate(words):
+            if type(word) == float:
+                        word = ""
             tokenized = tokenizer.tokenize(word)
             tokens.extend(tokenized)
             inversions.extend([idx] * len(tokenized))
@@ -111,17 +113,17 @@ def get_appropriate_dataset(data, max_seq_length, model_tokenizer, visual_dim, a
 
     features = convert_to_features(data, max_seq_length, tokenizer, visual_dim, acoustic_dim)
     all_input_ids = torch.tensor(
-        np.array([f.input_ids for f in features], dtype=np.long), dtype=torch.long)
+        np.array([f.input_ids for f in features], dtype=np.longlong), dtype=torch.long)
     all_input_mask = torch.tensor(
-        np.array([f.input_mask for f in features], dtype=np.long), dtype=torch.long)
+        np.array([f.input_mask for f in features], dtype=np.longlong), dtype=torch.long)
     all_segment_ids = torch.tensor(
-        np.array([f.segment_ids for f in features], dtype=np.long), dtype=torch.long)
+        np.array([f.segment_ids for f in features], dtype=np.longlong), dtype=torch.long)
     all_visual = torch.tensor(
-        np.array([f.visual for f in features], dtype=np.float), dtype=torch.float)
+        np.array([f.visual for f in features], dtype=float), dtype=torch.float)
     all_acoustic = torch.tensor(
-        np.array([f.acoustic for f in features], dtype=np.float), dtype=torch.float)
+        np.array([f.acoustic for f in features], dtype=float), dtype=torch.float)
     all_label_ids = torch.tensor(
-        np.array([f.label_id for f in features], dtype=np.float), dtype=torch.float)
+        np.array([f.label_id[0] for f in features], dtype=float), dtype=torch.float)
 
     dataset = TensorDataset(
         all_input_ids,

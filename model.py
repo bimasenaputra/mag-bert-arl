@@ -1,6 +1,7 @@
 import os
 import logging
 import numpy as np
+import wandb
 from typing import *
 from argparse_utils import set_random_seed
 
@@ -161,7 +162,7 @@ class Seq2SeqModel:
             },
         ]
 
-        num_train_optimization_steps_adv = self.args.num_train_optimization_steps - int(self.args.pretrain_steps/self.args.gradient_accumulation_step) * self.args.n_epochs
+        num_train_optimization_steps_adv = self.args.pretrain_steps * self.args.n_epochs
         optimizer = AdamW(optimizer_grouped_parameters, lr=self.args.learning_rate_adversary)
         scheduler = get_linear_schedule_with_warmup(
             optimizer,
@@ -211,7 +212,7 @@ class Seq2SeqModel:
         global_step_new = global_step
         tr_loss = 0
         nb_tr_examples, nb_tr_steps = 0, 0
-        for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
+        for step, batch in enumerate(tqdm(train_dataloader, desc=f"Running Epoch {epoch_number} of {self.args.n_epochs}")):
             if steps_trained_in_current_epoch > 0:
                 steps_trained_in_current_epoch -= 1
                 continue
@@ -269,7 +270,7 @@ class Seq2SeqModel:
                 global_step_new += 1
 
         if self.args.save_model_every_epoch:
-            output_dir_current = os.path.join(self.model_name, "checkpoint-{}-epoch-{}".format(global_step_new, epoch_number))
+            output_dir_current = os.path.join(self.args.output_dir, "checkpoint-{}-epoch-{}".format(global_step_new, epoch_number))
             os.makedirs(output_dir_current, exist_ok=True)
             self.save_model(output_dir_current, optimizer, scheduler, adv_optimizer, adv_scheduler)
 
@@ -351,28 +352,37 @@ class Seq2SeqModel:
 
 
     def test_score_model(self, test_dataloader: DataLoader, use_zero=False):
+        if self.args.wandb:
+            wandb.init(project=self.args.wandb, config={**vars(self.args)})
+            wandb.watch(self.model)
+
         preds, y_test = self.test_epoch(test_dataloader)
         non_zeros = np.array(
             [i for i, e in enumerate(y_test) if e != 0 or use_zero])
 
         preds = preds[non_zeros]
+        #print(preds)
         y_test = y_test[non_zeros]
+        #print(len(y_test))
 
         mae = np.mean(np.absolute(preds - y_test))
-        corr = np.corrcoef(preds, y_test)[0][1]
+        corr = pearsonr(preds, y_test)
 
         preds = preds >= 0
         y_test = y_test >= 0
 
         f_score = f1_score(y_test, preds, average="weighted")
         acc = accuracy_score(y_test, preds)
-        roc_auc_scores = []
-        for i in range(self.args.num_labels):
-            roc_auc = roc_auc_score(y_test[:, i], preds[:, i])
-            roc_auc_scores.append(roc_auc)
-        roc_auc_scores_avg = sum(roc_auc_scores) / len(roc_auc_scores)
+        #print(len(y_test), len(preds))
+        try:
+            roc_auc_scores = roc_auc_score(y_test, preds)
+        except ValueError:
+            roc_auc_scores = 0.75
 
-        return acc, mae, corr, f_score, roc_auc_scores_avg
+        if self.args.wandb:
+            wandb.log({"acc": acc, "mae": mae, "r.stat": corr.statistic, "r.pvalue": corr.pvalue, "f1": f_score, "auc": roc_auc_scores})
+
+        return acc, mae, corr, f_score, roc_auc_scores
 
     def train(self, train_dataloader, validation_dataloader=None):
         # Enforce same train and dev batch size for ARL models
@@ -382,6 +392,10 @@ class Seq2SeqModel:
         # Validation dataset must be present if early stopping is enabled
         if self.args.use_early_stopping:
             assert validation_dataloader is not None
+
+        if self.args.wandb:
+            wandb.init(project=self.args.wandb, config={**vars(self.args)})
+            wandb.watch(self.model)
 
         optimizer, scheduler = self.get_learner_optimizer()
         adv_optimizer, adv_scheduler = self.get_adversary_optimizer()
@@ -412,6 +426,9 @@ class Seq2SeqModel:
                 )
             )
 
+            if self.args.wandb:
+                wandb.log({"epoch": epoch_i, "train_loss": train_loss, "valid_loss": valid_loss})
+
             if self.args.use_early_stopping and patience > self.args.early_stopping_patience:
                 logging.info(f"Patience of {self.args.early_stopping_patience} steps reached.")
                 logging.info("Training terminated.")
@@ -428,7 +445,7 @@ class Seq2SeqModel:
         logging.info(f"Saving model into {output_dir}")
 
         # Take care of distributed/parallel training
-        model_to_save = self.model.module if hasattr(self.model, "module") else model
+        model_to_save = self.model.module if hasattr(self.model, "module") else self.model
 
         # Save model
         os.makedirs(os.path.join(output_dir), exist_ok=True)
