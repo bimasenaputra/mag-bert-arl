@@ -3,10 +3,6 @@ import multiprocessing
 import cv2
 import opensmile
 import detectron2
-import numpy as np
-import torch.nn as nn
-import torch
-import pickle as pkl
 
 from detectron2 import model_zoo
 from detectron2.engine import DefaultPredictor
@@ -14,43 +10,48 @@ from detectron2.config import get_cfg
 from pyAudioAnalysis import MidTermFeatures as aF
 
 class FeatureExtractor(object):
-    def __init__(self, video_path, audio_path, alignments):
+    def __init__(self, video_path, audio_path, aligments):
         self.path = video_path
         self.visual_extractor = VisualExtractor(video_path)
         self.acoustic_extractor = AcousticExtractor(audio_path)
-        self.text_extractor = TextExtractor(alignments)
+        self.text_extractor = TextExtractor(aligments)
 
-    def extract(self, visual=None, acoustic="pyaudioanalysis", text="words", visual_features=None, acoustic_features = None, text_features = None):
+    def extract(self, visual="cnn_lstm", acoustic="pyaudioanalysis", text="words"):
+        visual_features = None
+        acoustic_features = None
+        text_features = None
+
         # visual
         if visual == "cnn_lstm":
             visual_features = self.visual_extractor.cnn_lstm()
         elif visual == "open_face":
             visual_features = self.visual_extractor.open_face()
-        else:
-            pass
-            #assert visual_features is not None
 
         # acoustic
         if acoustic == "pyaudioanalysis":
             acoustic_features = self.acoustic_extractor.pyaudioanalysis()
         elif acoustic == "egemaps":
             acoustic_features = self.acoustic_extractor.egemaps()
-        else:
-            assert acoustic_features is not None
 
         # text
         if text == "words":
             text_features = self.text_extractor.words()
-        else:
-            assert text_features is not None
 
         # segments
         segments_dir = [f.path for f in sorted(os.scandir(self.path), key=lambda x: x.name) if f.is_dir()]
-        segments = [os.path.split(dirname)[1] for dirname in segments_dir]
+        segments = []
+
+        for dirname in segments_dir:
+            base_name = os.path.basename(dirname)
+            files = [f.name for f in os.scandir(dirname) if f.is_file()]
+
+            for idx, filename in enumerate(files):
+                segments_name = f"{base_name}[{idx}]"
+                segments.append(segments_name)
 
         assert len(text_features) == len(segments)
-        #assert len(visual_features) == len(acoustic_features)
-        #assert len(visual_features) == len(text_features)
+        assert len(visual_features) == len(acoustic_features)
+        assert len(visual_features) == len(text_features)
 
         features = [(text_features, acoustic_features, visual_features), segments]
         return features
@@ -81,10 +82,7 @@ class AcousticExtractor(object):
 
     def pyaudioanalysis(self):
         path_list = [f.path for f in sorted(os.scandir(self.path), key=lambda x: x.name) if f.is_dir()]
-        features = aF.multiple_directory_feature_extraction(path_list, 1, 1, 0.02, 0.02, compute_beat=False) 
-        with open("pyaudio.pkl", "wb") as f:
-                pkl.dump(features, f)
-        print(features)
+        features = aF.multiple_directory_feature_extraction(path_list, , 1, 1, 0.02, 0.02, compute_beat=False) 
         return features
 
 class VisualExtractor(object):
@@ -128,13 +126,8 @@ class VisualExtractor(object):
                         if(counter % (SKIP_FRAME_COUNT+1) == 0):             
                           # predict pose estimation on the frame
                           outputs = pose_detector(frame)          
-                          instances = outputs['instances']
-                          pred_boxes = instances.pred_boxes.tensor
-                          scores = instances.scores
-
-                          # Filter persons based on confidence threshold
-                          persons = [pred_boxes[i] for i in range(len(scores)) if scores[i] > 0.95]
-                          pIndices = [i for i in range(len(scores)) if scores[i] > 0.95]
+                          # filter the outputs with a good confidence score
+                          persons, pIndicies = filter_persons(outputs)
                           if len(persons) >= 1:
                               # pick only pose estimation results of the first person.
                               # actually, we expect only one person to be present in the video. 
@@ -143,9 +136,8 @@ class VisualExtractor(object):
                               features = []
                               # add pose estimate results to the feature array
                               for i, row in enumerate(p):
-                                  print(row)
-                                  features.append(row[0].item())
-                                  features.append(row[1].item())
+                                  features.append(row[0])
+                                  features.append(row[1])
 
                               # append the feature array into the buffer
                               # not that max buffer size is 32 and buffer_window operates in a sliding window fashion
@@ -185,14 +177,13 @@ class VisualExtractor(object):
         pass
 
 class TextExtractor(object):
-    def __init__(self, alignments):
-        self.alignments = alignments
+    def __init__(self, aligments):
+        self.aligment
 
     def words(self):
         words = []
 
-        for alignment in self.alignments:
-            words.append([word_alignment["text"] for word_alignment in alignment])
-        with open("words.pkl", "wb") as f:
-                pkl.dump(words, f)
+        for alignment in aligments:
+            words.append([word_aligment["word"] for word_aligment in aligment])
+
         return words 

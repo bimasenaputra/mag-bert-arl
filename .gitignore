@@ -3,3 +3,4 @@ __pycache__
 wandb
 .vscode
 datasets/*.pkl
+mag-bert-base-*/

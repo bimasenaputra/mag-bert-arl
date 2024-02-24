@@ -29,6 +29,7 @@ audio_segment_folder = os.path.expanduser("~/audio-seg/")
 annotation_file = os.path.expanduser("~/labels/")
 video_files = [f.path for f in sorted(os.scandir(video_folder), key=lambda x: x.name) if f.is_file()]
 audio_files = [f.path for f in sorted(os.scandir(audio_folder), key=lambda x: x.name) if f.is_file()]
+#print(audio_files[0])
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 language = "en"
@@ -44,7 +45,7 @@ def get_segments():
             for i, segment in enumerate(sorted(result['segments'], key=lambda x: x['id'])):
                 segment_alignments_one = []
                 for word in segment["words"]:
-                    segment_time_windows_one.append((i, word["start"], word["end"]))
+                    segment_time_windows_one.append((i, int(1000*word["start"]), int(1000*word["end"])))
                     # avoid precision error
                     segment_alignments_one.append(dict(text=word["text"], start=0, end=((1000*word["end"])-(1000*word["start"]))/1000))
                 segment_alignments.append(segment_alignments_one)

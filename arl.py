@@ -22,27 +22,43 @@ class LearnerNN(nn.Module):
         self.num_labels = num_labels
 
         all_layers = []
-        input_size = hidden_size
 
-        for dim in n_hidden:
-            all_layers.append(nn.Linear(input_size, dim))
-            all_layers.append(activation_fn())
-            input_size = dim
+        for i in range(n_hidden):
+            layer = []
+            layer.append(nn.Linear(hidden_size, hidden_size))
+            layer.append(nn.Dropout(0.5))
+            all_layers.append(nn.Sequential(*layer))
+            
+            layer = []
+            layer.append(nn.LayerNorm(hidden_size))
+            layer.append(activation_fn())
+            all_layers.append(nn.Sequential(*layer))
 
-        all_layers.append(nn.Linear(n_hidden[-1], num_labels))
+        all_layers.append(nn.Linear(hidden_size, num_labels))
 
-        self.learner = nn.Sequential(*all_layers)
-
+        self.learner = nn.ModuleList(all_layers)
 
     def forward(self, features, targets=None):
         """
         The forward step for the learner.
         """
-        logits = self.learner(features)
+        res_features = features
+        for i, layer in enumerate(self.learner):
+            if i % 2 == 1:
+                continue
+            if i > 0:
+                features = self.learner[i-1](features + res_features)
+                res_features = features
+            features =  self.learner[i](features)
+        logits = features
         outputs = (logits, )
 
         if targets is not None:
-            loss = F.binary_cross_entropy_with_logits(logits, targets)
+            if self.num_labels == 1:
+                loss = F.mse_loss(logits.view(-1), targets.view(-1))
+                #loss = F.binary_cross_entropy_with_logits(logits.view(-1), targets.view(-1))
+            else:
+                loss = F.cross_entropy(logits.view(-1, self.num_labels), targets.view(-1))
             outputs = (loss, ) + outputs
 
         return outputs
@@ -60,38 +76,54 @@ class AdversaryNN(nn.Module):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_labels = num_labels
-        self.weights = None
 
         all_layers = []
-        input_size = hidden_size
 
-        for dim in n_hidden:
-            all_layers.append(nn.Linear(input_size, dim))
-            input_size = dim
+        for i in range(n_hidden):
+            layer = []
+            layer.append(nn.Linear(hidden_size, hidden_size))
+            layer.append(nn.Dropout(0.5))
+            all_layers.append(nn.Sequential(*layer))
+            all_layers.append(nn.LayerNorm(hidden_size))
 
-        all_layers.append(nn.Linear(n_hidden[-1], num_labels))
+        all_layers.append(nn.Linear(hidden_size, num_labels))
 
-        self.adversary = nn.Sequential(*all_layers)
+        self.adversary = nn.ModuleList(all_layers)
 
     def forward(self, features):
         """
         The forward step for the adversary.
         """
-        logits = self.adversary(features)
+        res_features = features
+        for i, layer in enumerate(self.adversary):
+            if i % 2 == 1:
+                continue
+            if i > 0:
+                features = self.adversary[i-i](features + res_features)
+                res_features = features
+            features = self.adversary[i](features)
+        logits = features
         weights = self.compute_example_weights(logits)
-        self.weights = weights
-
         return weights
 
     def compute_example_weights(self, logits):
         if self.num_labels == 1:
             # Doing regression
-            example_weights = torch.sigmoid(logits)
+            example_weights = F.relu(logits)
+            #example_weights = torch.sigmoid(logits)
             mean_example_weights = example_weights.mean()
             example_weights = example_weights/torch.max(mean_example_weights, torch.tensor(1e-4))
             example_weights = torch.ones_like(example_weights) + example_weights
-
+            
             return example_weights
+        elif self.num_labels == 2:
+            # Doing binary classification
+            example_weights = torch.sigmoid(logits, dim=1)
+            mean_example_weights = example_weights.mean(dim=0)
+            example_weights = example_weights/torch.max(mean_example_weights, torch.tensor(1e-4))
+            example_weights = torch.ones_like(example_weights) + example_weights
+            class_weights = example_weights[torch.arange(example_weights.size(0)), self.num_labels]
+            return class_weights
         else:
             example_weights = torch.softmax(logits, dim=1)  
             mean_example_weights = example_weights.mean(dim=0)  
@@ -107,8 +139,8 @@ class ARL(nn.Module):
         self,
         hidden_size,
         num_labels,
-        learner_hidden_units=[64, 32],
-        adversary_hidden_units=[32],
+        learner_hidden_units=2,
+        adversary_hidden_units=1,
         activation_fn=nn.ReLU,
     ):
         """
@@ -144,7 +176,10 @@ class ARL(nn.Module):
         """
         The forward step for the ARL.
         """
-        learner_loss_raw, learner_logits = self.learner(features, targets)
+        if targets is None:
+                learner_logits, = self.learner(features)
+        else:
+                learner_loss_raw, learner_logits = self.learner(features, targets)
         
         outputs = (learner_logits,)
 
@@ -154,6 +189,8 @@ class ARL(nn.Module):
             adversary_weights = torch.ones(batch_size, self.num_labels) if self.pretrain else self.adversary(features)
             adversary_weights = adversary_weights.to(device)
             loss = self.get_loss(learner_loss_raw, adversary_weights)
+            print(learner_loss_raw)
+            print(loss)
             outputs = loss + outputs
 
         return outputs
