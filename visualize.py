@@ -49,13 +49,13 @@ def wrapped_model(input_ids,
         attention_mask=None,
         token_type_ids=None
     ):
-    #print(input_ids.dtype, visual.dtype, acoustic.dtype, attention_mask.dtype, token_type_ids.dtype, encoder_hidden_states is None)
     return model(input_ids,
         visual,
         acoustic,
         attention_mask=attention_mask,
         token_type_ids=token_type_ids
     )[0]
+
 
 shap_log = {"t": [], "v":[], "a":[]}
 with open("shap.pkl", "wb") as f:
@@ -78,30 +78,14 @@ gradient_shap = GradientShap(wrapped_model)
 for tup in train_dataloader:
     tup = tuple(t.to(DEVICE) for t in tup)
     input_ids, visual, acoustic, input_mask, segment_ids, label_ids = tup
-    #print(input_ids.dtype, input_ids.size())
     visual = torch.squeeze(visual, 1)
     acoustic = torch.squeeze(acoustic, 1)
-    #print(visual.dtype, acoustic.dtype)
     rndm = torch.rand(input_ids.size()).to(DEVICE).long()
     alpha = torch.rand(input_ids.size()).to(DEVICE).long()
     random_point = (rndm + alpha * (input_ids - rndm)).to(DEVICE).long()
     input_ids = intr_embed.indices_to_embeddings(input_ids)
     random_point = intr_embed.indices_to_embeddings(random_point)
-    """outputs = model(
-                input_ids,
-                visual,
-                acoustic,
-                token_type_ids=segment_ids,
-                attention_mask=input_mask,
-                labels=None,
-            )"""
-    #print(type(target.item()))
-    #print(rndm.dtype, alpha.dtype, rndm.size(), alpha.size(), input_ids.size())
-    #print(random_point.dtype, random_point.size())
-    #print(input_ids.shape[1:], random_point.shape[1:])
     inpt = (input_ids, visual, acoustic)
-    #print(inpt[0].dtype, random_point.dtype)
-    #print(input_mask.shape, segment_ids.shape, target.shape)
     baseline = (random_point, visual * 0, acoustic * 0)
     attributions = gradient_shap.attribute(inpt, baseline, target=0, additional_forward_args=(input_mask, segment_ids))
     shap_log["t"].append(attributions[0].sum().item())
