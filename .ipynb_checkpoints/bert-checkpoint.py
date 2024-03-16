@@ -58,7 +58,7 @@ class MAG_BertModel(BertPreTrainedModel):
             multimodal_config.beta_shift,
             multimodal_config.dropout_prob,
             visual_modality = True,
-            acoustic_modality = False,
+            acoustic_modality = True,
         )
 
         self.init_weights()

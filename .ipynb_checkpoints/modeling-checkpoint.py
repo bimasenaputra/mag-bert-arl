@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from global_configs import *
 
 class MAG(nn.Module):
-    def __init__(self, hidden_size, beta_shift, dropout_prob, visual_modality, acoustic_modality):
+    def __init__(self, hidden_size, beta_shift, dropout_prob, visual_modality = True, acoustic_modality = True):
         super(MAG, self).__init__()
         print(
             "Initializing MAG with beta_shift:{} hidden_prob:{}".format(

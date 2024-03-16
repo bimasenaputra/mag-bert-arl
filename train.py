@@ -11,7 +11,7 @@ from global_configs import ACOUSTIC_DIM, VISUAL_DIM, DEVICE, BERT_PRETRAINED_MOD
 from model import Seq2SeqModel
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dataset", type=str, choices=["mosi", "mosei", "ets"], default="ets", help="Pickle (.pkl) file saved in ./dataset folder in { train: {(), }, test: {...}, dev (optional): {...}} format")
+parser.add_argument("--dataset", type=str, choices=["mosi", "mosei", "ets", "fiv2"], default="fiv2", help="Pickle (.pkl) file saved in ./dataset folder in { train: {(), }, test: {...}, dev (optional): {...}} format")
 parser.add_argument("--max_seq_length", type=int, default=256, help="Maximum number of tokens the model can take in a single input")
 parser.add_argument("--train_batch_size", type=int, default=64, help="Batch size for training")
 parser.add_argument("--num_labels", type=int, default=1, help="Number of classes/labels to predict")
@@ -20,7 +20,7 @@ parser.add_argument("--n_epochs", type=int, default=200, help="Number of trainin
 parser.add_argument("--beta_shift", type=float, default=1.0, help="The constant 'beta' to be used in the adaption gate during feature fusion with other features")
 parser.add_argument("--dropout_prob", type=float, default=0.5, help="Probability of a neuron being dropped out during each training session")
 parser.add_argument("--model", type=str, default="bert-base-uncased", help="Name of model to train")
-parser.add_argument("--model_type", type=str, choices=["mag-bert-arl", "mag-bert"], default="mag-bert-arl", help="MAG-BERT model type")
+parser.add_argument("--model_type", type=str, choices=["mag-bert-arl", "bert-arl", "mag-bert"], default="mag-bert-arl", help="MAG-BERT model type")
 parser.add_argument("--tokenizer", type=str, choices=BERT_PRETRAINED_MODEL_ARCHIVE_LIST, default="bert-base-uncased", help="Bert tokenizer to use")
 parser.add_argument("--learning_rate", type=float, default=1e-5, help="Learning rate for the learner")
 parser.add_argument("--gradient_accumulation_step", type=int, default=1, help="Number of steps before gradients are summed to update weights")
@@ -31,7 +31,7 @@ parser.add_argument("--save_model_every_epoch", type=str2bool, default="false", 
 parser.add_argument("--output_dir", type=str, default="mag-bert-base-uncased-3", help="Output directory where the model will be saved")
 parser.add_argument("--learning_rate_adversary", type=float, default=1e-5, help="Learning rate for the adversary")
 parser.add_argument("--pretrain_steps", type=int, default=6, help="Number of steps to pretrain the learner, -1 means no pretraining")
-parser.add_argument("--use_early_stopping", type=str2bool, default="true", help="Whether or not to use early stopping to mitigate too many epochs")
+parser.add_argument("--use_early_stopping", type=str2bool, default="false", help="Whether or not to use early stopping to mitigate too many epochs")
 parser.add_argument("--early_stopping_patience", type=int, default=2, help="Number of steps until there is no improvement in validation loss")
 parser.add_argument("--use_cuda", type=str2bool, default="true", help="Use cuda for training")
 parser.add_argument("--cuda_device", type=int, default=0, help="Cuda device to use for training")

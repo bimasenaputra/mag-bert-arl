@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.utils.data import RandomSampler, SequentialSampler, TensorDataset
 from torch.utils.data.distributed import DistributedSampler
 
-from transformers import AutoTokenizer
+from transformers import BertTokenizer
 
 class InputFeatures(object):
     """A single set of features of data."""
@@ -23,10 +23,10 @@ def convert_to_features(examples, max_seq_length, tokenizer, visual_dim, acousti
     for (ex_index, example) in enumerate(examples):
 
         (words, visual, acoustic), label_id, segment = example
-        #visual, acoustic = visual[0], acoustic[0] # only for fiv2
+        visual, acoustic = visual[0], acoustic[0] # only for fiv2
         #print(acoustic.shape, visual.shape)
-        #if len(acoustic.shape) == 1 or len(visual.shape) == 1:
-        #    continue
+        if len(acoustic.shape) == 1 or len(visual.shape) == 1:
+            continue
         tokens, inversions = [], []
         for idx, word in enumerate(words):
             if type(word) == float:
@@ -112,7 +112,7 @@ def prepare_bert_input(tokens, visual, acoustic, tokenizer, max_seq_length, visu
 
 def get_appropriate_dataset(data, max_seq_length, model_tokenizer, visual_dim, acoustic_dim):
 
-    tokenizer = AutoTokenizer.from_pretrained(model_tokenizer)
+    tokenizer = BertTokenizer.from_pretrained(model_tokenizer)
 
     features = convert_to_features(data, max_seq_length, tokenizer, visual_dim, acoustic_dim)
     all_input_ids = torch.tensor(

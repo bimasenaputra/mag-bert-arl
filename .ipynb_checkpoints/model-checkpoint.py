@@ -85,11 +85,11 @@ class Seq2SeqModel:
             self.model = MAG_BertForSequenceClassification.from_pretrained(model_name, multimodal_config=multimodal_config, num_labels=self.args.num_labels)
         elif model_type == "mag-bert-arl":
             if args.tokenizer.split('-')[0] == 'bert':
+                print("siuuuuuuuuuuuuuuuuuuuuuuuuuuu")
                 self.model = MAG_BertWithARL.from_pretrained(model_name, multimodal_config=multimodal_config, num_labels=self.args.num_labels)
             elif args.tokenizer.split('-')[0] == 'roberta':
                 self.model = MAG_RobertaWithARL.from_pretrained(model_name, multimodal_config=multimodal_config, num_labels=self.args.num_labels)
         elif model_type == "bert-arl":
-            print("siuuuuuuuuuuuu")
             self.model = BertWithARL.from_pretrained(model_name, multimodal_config=multimodal_config, num_labels=self.args.num_labels)
 
         self.model.to(self.device)
