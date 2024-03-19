@@ -89,7 +89,6 @@ class Seq2SeqModel:
             elif args.tokenizer.split('-')[0] == 'roberta':
                 self.model = MAG_RobertaWithARL.from_pretrained(model_name, multimodal_config=multimodal_config, num_labels=self.args.num_labels)
         elif model_type == "bert-arl":
-            print("siuuuuuuuuuuuu")
             self.model = BertWithARL.from_pretrained(model_name, multimodal_config=multimodal_config, num_labels=self.args.num_labels)
 
         self.model.to(self.device)
