@@ -11,12 +11,14 @@ from load_dataset import get_appropriate_dataset
 from global_configs import ACOUSTIC_DIM, VISUAL_DIM, DEVICE, BERT_PRETRAINED_MODEL_ARCHIVE_LIST
 from argparse_utils import str2bool
 
+from fairlearn.metrics import demographic_parity_difference, equalized_odds_difference
+
 parser = argparse.ArgumentParser()
-parser.add_argument("--dataset", type=str, choices=["mosi", "mosei", "ets", "fiv2"], default="fiv2", help="Pickle (.pkl) file saved in ./dataset folder in { train: {(), }, test: {...}, dev (optional): {...}} format")
+parser.add_argument("--dataset", type=str, choices=["mosi", "mosei", "ets", "fi"], default="ets", help="Pickle (.pkl) file saved in ./dataset folder in { train: {(), }, test: {...}, dev (optional): {...}} format")
 parser.add_argument("--max_seq_length", type=int, default=256, help="Maximum number of tokens the model can take in a single input")
 parser.add_argument("--beta_shift", type=float, default=1.0, help="The constant 'beta' to be used in the adaption gate during feature fusion with other features")
 parser.add_argument("--dropout_prob", type=float, default=0.5, help="Probability of a neuron being dropped out during each training session")
-parser.add_argument("--model", type=str, default="mag-bert-base-uncased-bce", help="Name of model to train")
+parser.add_argument("--model", type=str, default="mag-bert-base-uncased-3", help="Name of model to train")
 parser.add_argument("--model_type", type=str, choices=["mag-bert-arl", "mag-bert"], default="mag-bert-arl", help="MAG-BERT model type")
 parser.add_argument("--num_labels", type=int, default=1, help="Number of classes/labels to predict")
 parser.add_argument("--tokenizer", type=str, choices=BERT_PRETRAINED_MODEL_ARCHIVE_LIST, default="bert-base-uncased", help="Bert tokenizer to use")
@@ -43,8 +45,16 @@ model.to(args.device)
 with open(f"datasets/{args.dataset}.pkl", "rb") as handle:
     data = pickle.load(handle)
 
-gender = pd.read_csv("analysis/fiv2_gender_pred.csv", sep=";")
-gender = dict(zip(gender['VideoName'], gender['Gender']))    
+gender = pd.read_csv("analysis/ets_gender_pred.csv")
+gender = dict(zip(gender['Filename'], gender['Predicted_Label']))    
+gender_map = {"female": 0, "male": 1}
+#gender = pd.read_csv("analysis/fiv2_gender_pred.csv", sep=";")
+#gender = dict(zip(gender['VideoName'], gender['Gender']))    
+#gender_map = {1: 1, 2: 0}
+
+#race = pd.read_csv("analysis/ets_race_pred.csv")
+#race = dict(zip(race['Filename'], race['Race']))
+#race_map = {'white': 2, 'black': 3, 'asian': 4, 'latino hispanic': 5, 'middle eastern': 6, 'indian': 7}
 
 test_data = data["test"]
 test_dataset = get_appropriate_dataset(test_data, args.max_seq_length, args.tokenizer, VISUAL_DIM, ACOUSTIC_DIM)
@@ -52,67 +62,48 @@ test_dataloader = DataLoader(
         test_dataset, batch_size=1, drop_last=False,
     )
 
-def arl_weight():
-    #weights = {"TP": {"male":[], "female":[]}, "TN": {"male":[], "female":[]}, "FP": {"male":[], "female":[]}, "FN": {"male":[], "female":[]}}
-    weights = {"TP": {1:[], 2:[]}, "TN": {1:[], 2:[]}, "FP": {1:[], 2:[]}, "FN": {1:[], 2:[]}}
+def fair_metrics():
+    preds = []
+    labels = []
+    gender_sf = []
+    #race_sf = []
     with torch.no_grad():
         for idx, tup in enumerate(test_dataloader,0):
             tup = tuple(t.to(args.device) for t in tup)
             input_ids, visual, acoustic, input_mask, segment_ids, label_ids = tup
             visual = torch.squeeze(visual, 1)
             acoustic = torch.squeeze(acoustic, 1)
-            outputs = model.bert(
+            outputs = model(
                 input_ids,
                 visual,
                 acoustic,
                 token_type_ids=segment_ids,
-                attention_mask=input_mask
+                attention_mask=input_mask,
+                labels=None,
             )
-            pooled_output = outputs[1]
-            pooled_output = model.dropout(pooled_output)
-            logits = model.classifier(pooled_output)[0].detach().cpu().numpy()
-            weight = model.classifier.adversary(pooled_output).detach().cpu().numpy().tolist()
+            logits = outputs[0].detach().cpu().numpy()
             label_ids = label_ids.detach().cpu().numpy()
-            logits = np.squeeze(logits).tolist() >= 0.5
-            label_ids = np.squeeze(label_ids).tolist() >= 0.5
-            #print(logits, label_ids, weight)
-            pred_gender = gender[test_data[idx][-1]+".mp4"]
-            if logits:
-                weights["TP" if logits == label_ids else "FP"][pred_gender].extend(weight[0])
-            else:
-                weights["TN" if logits == label_ids else "FN"][pred_gender].extend(weight[0])
-    
-    return weights
+            # ets 5.6, fi 0.5
+            logits = np.squeeze(logits).tolist() >= 5.6
+            label_ids = np.squeeze(label_ids).tolist() >= 5.6
+            pred_gender = gender_map[gender[test_data[idx][-1]+".mp4"]]
+            #pred_race = race_map[race.get(test_data[idx][-1]+'.jpg', 'white')]
 
-weights = arl_weight()
-fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2,2)
-ax1.hist(weights["TN"][1], bins=20, density=True, alpha=0.5, color='b', label='male')
-ax1.hist(weights["TN"][2], bins=20, density=True, alpha=0.5, color='r', label='female')
-ax1.set_xlabel("Weight")
-ax1.set_ylabel("Density")
-ax1.set_title('label = 0 | predicted = 0')
-ax1.legend()
+            preds.append(logits)
+            labels.append(label_ids)
+            gender_sf.append(pred_gender)
+            #race_sf.append(pred_race)
 
-ax2.hist(weights["FP"][1], bins=20, density=True, alpha=0.5, color='b', label='male')
-ax2.hist(weights["FP"][2], bins=20, density=True, alpha=0.5, color='r', label='female')
-ax2.set_xlabel("Weight")
-ax2.set_ylabel("Density")
-ax2.set_title('label = 1 | predicted = 0')
-ax2.legend()
+    preds = np.array(preds)
+    labels = np.array(labels)
+    gender_sf = np.array(gender_sf)
+    #race_sf = np.array(race_sf)
+    #s_f_frame = pd.DataFrame(np.stack([gender_sf, race_sf], axis=1), columns=['Gender', 'Race'])
 
-ax3.hist(weights["FN"][1], bins=20, density=True, alpha=0.5, color='b', label='male')
-ax3.hist(weights["FN"][2], bins=20, density=True, alpha=0.5, color='r', label='female')
-ax3.set_xlabel("Weight")
-ax3.set_ylabel("Density")
-ax3.set_title('label = 0 | predicted = 1')
-ax3.legend()
+    spdd = demographic_parity_difference(labels, preds, sensitive_features=gender_sf)
+    eodd = equalized_odds_difference(labels, preds, sensitive_features=gender_sf)
+    #ep = equal_opportunity_difference(labels, preds, sensitive_features=s_f_frame)
 
-ax4.hist(weights["TP"][1], bins=20, density=True, alpha=0.5, color='b', label='male')
-ax4.hist(weights["TP"][2], bins=20, density=True, alpha=0.5, color='r', label='female')
-ax4.set_xlabel("Weight")
-ax4.set_ylabel("Density")
-ax4.set_title('label = 1 | predicted = 1')
-ax4.legend()
+    return spdd, eodd
 
-fig.tight_layout()
-plt.savefig('arl_weight_fiv2.png')
+print(fair_metrics())

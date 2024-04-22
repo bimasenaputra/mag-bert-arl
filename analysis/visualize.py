@@ -66,6 +66,7 @@ test_data = data["test"]
 sample_idx = random.randint(0, len(test_data)-1)
 sample_test = [test_data[sample_idx]]
 (text,_,_), _ ,segment = test_data[sample_idx]
+
 sample_dataset = get_appropriate_dataset(sample_test, args.max_seq_length, args.tokenizer, VISUAL_DIM, ACOUSTIC_DIM)
 test_dataloader = DataLoader(
         sample_dataset, shuffle=True, drop_last=False,
