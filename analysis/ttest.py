@@ -1,4 +1,4 @@
-
+from statsmodels.stats.multitest import multipletests
 import pickle
 from sklearn.model_selection import KFold
 import numpy as np
@@ -49,13 +49,11 @@ for i, j in itertools.combinations(range(num_models), 2):
     t_statistic, p_value = stats.ttest_ind(models[i], models[j])
     p_values.append(((i, j), p_value))
 
-# Sort p-values
-p_values.sort(key=lambda x: x[1])
+pvals = [pval[1] for pval in p_values]
 
 # Holm-Sidak correction
-alpha = 0.05
-adjusted_p_values = [min(alpha / (num_models - k), 1) for k in range(num_models)]
+result = multipletests(pvals, method="holm-sidak")
 
 # Print the adjusted p-values
-for (model1, model2), p_value in p_values:
-    print(f"Adjusted p-value for comparing model {model1 + 1} and model {model2 + 1}: {p_value}")
+for i in range(len(p_values)):
+    print(f"Adjusted p-value for comparing model {p_values[i][0][0] + 1} and model {p_values[i][0][1] + 1}: {result[1][i]}")
