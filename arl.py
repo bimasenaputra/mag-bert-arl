@@ -56,7 +56,7 @@ class LearnerNN(nn.Module):
         if targets is not None:
             if self.num_labels == 1:
                 loss = F.mse_loss(logits.view(-1), targets.view(-1))
-                #loss = F.binary_cross_entropy_with_logits(logits.view(-1), targets.view(-1))
+                #loss = F.binary_cross_entropy_with_logits(logits.view(-1) >= 5.6, targets.view(-1) >= 5.6)
             else:
                 loss = F.cross_entropy(logits.view(-1, self.num_labels), targets.view(-1))
             outputs = (loss, ) + outputs
