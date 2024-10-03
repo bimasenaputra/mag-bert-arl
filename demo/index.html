@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"
+          integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+    <link href='http://fonts.googleapis.com/css?family=Lato:300,400,900' rel='stylesheet' type='text/css'>
+    <link href="style.css" rel="stylesheet">
+    <meta charset="utf-8">
+
+	<title>MAG-BERT-ARL</title>
+	<link href="css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.1/css/bulma.min.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css">
+    <script type="module" src="https://gradio.s3-us-west-2.amazonaws.com/3.12.0/gradio.js"></script>
+</head>
+
+<body data-new-gr-c-s-check-loaded="14.1091.0" data-gr-ext-installed="">
+
+
+<div class="container" >
+<header role="banner">
+</header>
+<main role="main">
+<article itemscope itemtype="https://schema.org/BlogPosting">
+
+<div class="container pt-5 mt-5 shadow p-5 mb-5 bg-white rounded">
+    <div class="column has-text-centered">
+    <h1 class="title is-1 publication-title"> <img id="teaser" width="10%" src="images/logo.png"> <b>MAG-BERT-ARL:</b>  </h1>
+    <h3 class="title is-3 publication-title"> Fair Automated Video Interview Assessment System </h3>
+    <h2 class="title is-3 publication-title"> without Demographics  </h3>
+    </div>
+    <br>
+    <div class="is-size-5">
+        <span class="author-block">
+          <h4 style="text-align: center;"><b>Authors: </b>Bimasena Putra, Kurniawati Azizah, Candy Olivia Mawalim, Ikhlasul Akmal Hanif, Sakriani Sakti, Chen Wee Long, Shogo Okada</h4>
+    </div>
+
+    <div class="is-size-5 publication-authors">
+        <span class="author-block"><h4 style="text-align: center;"><b style="color:#d76100; font-weight:normal">&#x25B6 </b>Faculty of Computer Science, University of Indonesia</h4></span>
+        <span class="author-block"><h4 style="text-align: center;"><b style="color:#d76100; font-weight:normal">&#x25B6 </b>Graduate School of Advanced Science and Technology, Japan Advanced Institute of Science and Technology</h4></span>
+        <span class="author-block"><h4 style="text-align: center;"><b style="color:#d76100; font-weight:normal">&#x25B6 </b>Graduate School of Science and Technology, Nara Institute Science and Technology</h4></span>
+        <span class="author-block"><h4 style="text-align: center;"><b style="color:#d76100; font-weight:normal">&#x25B6 </b>Educational Testing Service</h4></span>
+    </div>
+
+    <br><br>
+    <h3 class="subtitle has-text-centered">
+        MAG-BERT-ARL is the first multimodal regression model to assess interview that is <br/>fair, interpretable, and does not require sensitive attributes in its training.
+    </h3>
+
+    <div class="column has-text-centered">
+        <span class="link-block">
+            <a href="https://github.com/bimasenaputra/MAG-BERT-ARL" target="_blank"
+            class="external-link button is-normal is-rounded is-dark">
+            <span class="icon">
+                <i class="fab fa-github"></i>
+            </span>
+            <span>Github</span>
+            </a>
+        </span>
+
+        <span class="link-block">
+            <a href="https://arxiv.org/" target="_blank"
+            class="external-link button is-normal is-rounded is-dark">
+            <span class="icon">
+                <i class="ai ai-arxiv"></i>
+            </span>
+            <span>Paper</span>
+            </a>
+        </span>
+    </div>
+</div>
+
+<div class="container pt-5 mt-5 shadow p-5 mb-5 bg-white rounded">
+    <div class="columns is-centered has-text-centered">
+        <div class="column is-six-fifths">
+          <h2 class="title is-3">Abstract</h2>
+        </div>
+    </div>
+    <p style="font-size: 18px;">
+        Potential biases within automated video interview assessment algorithms may disadvantage specific demographics due to the collection of sensitive attributes, which are regulated by the General Data Protection Regulation (GDPR). To mitigate these fairness concerns, this research introduces MAG-BERT-ARL, an automated video interview assessment system that eliminates reliance on sensitive attributes. MAG-BERT-ARL integrates Multimodal Adaptation Gate and Bidirectional Encoder Representations from Transformers (MAG-BERT) model with the Adversarially Reweighted Learning (ARL). This integration aims to improve the performance of underrepresented groups by promoting Rawlsian Max-Min Fairness. Through experiments on the Educational Testing Service (ETS) and First Impressions (FI) datasets, the proposed method demonstrates its effectiveness in optimizing model performance (increasing Pearson correlation coefficient up to 0.17 in the FI dataset and precision up to 0.39 in the ETS dataset) and fairness (reducing equal accuracy up to 0.11 in the ETS dataset). The findings underscore the significance of integrating fairness-enhancing techniques like ARL and highlight the impact of incorporating nonverbal cues on hiring decisions.
+    </p>
+
+</div>
+
+<div class="container pt-5 mt-5 shadow p-5 mb-5 bg-white rounded">
+    <div class="columns is-centered has-text-centered">
+        <div class="column is-six-fifths">
+          <h2 class="title is-3">Demo</h2>
+        </div>
+      </div>
+
+    <div class="text-center">
+        <gradio-app src="https://<space-subdomain>.hf.space"></gradio-app>
+    </div>
+</div>
